@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --color-deepNavy: #0B132B;
+  --color-surfaceCard: #1C2541;
+  --color-surfaceCardBorder: #3A506B;
+  --color-accentPrimary: #48CAE4;
+  --color-accentSecondary: #00B4D8;
+  --color-accentTertiary: #0077B6;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: var(--color-deepNavy);
+    --foreground: #ffffff;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surfaceCard/50 backdrop-blur-md border border-surfaceCardBorder rounded-2xl shadow-xl;
+  }
+}
