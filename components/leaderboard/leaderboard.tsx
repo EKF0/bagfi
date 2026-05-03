@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { Trophy, Medal, MapPin, ExternalLink, Share2 } from 'lucide-react';
+import { Trophy, Medal, MapPin, ExternalLink, Share2, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const MOCK_LEADERBOARD = [
   { rank: 1, address: 'vitalik.eth', yield: '+42.5%', tvl: '$1.2M', tags: ['DeFi Degen', 'Whale'] },
@@ -16,6 +17,83 @@ const MOCK_LEADERBOARD = [
 export function Leaderboard() {
   const { isConnected, address } = useAccount();
   const [isPublic, setIsPublic] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [leaderboardData, setLeaderboardData] = useState(MOCK_LEADERBOARD);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchLeaderboard = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('wallet_address, is_public_leaderboard')
+          .eq('is_public_leaderboard', true);
+          
+        if (data && isMounted) {
+          // In a real app we would have real yield data
+          // For now, let's format the DB users like the mock users and prepend them
+          const realUsers = data.map((u, i) => ({
+            rank: i + 1,
+            address: u.wallet_address.substring(0, 6) + '...' + u.wallet_address.substring(38),
+            yield: '+12.4%', // Dummy yield
+            tvl: '$' + (Math.random() * 10).toFixed(1) + 'K',
+            tags: ['Community Member']
+          }));
+          
+          if (realUsers.length > 0) {
+            // Re-rank everyone
+            const combined = [...realUsers, ...MOCK_LEADERBOARD].map((u, i) => ({
+               ...u, rank: i + 1
+            }));
+            setLeaderboardData(combined);
+          }
+        }
+        
+        if (address && isMounted) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('is_public_leaderboard')
+            .eq('wallet_address', address.toLowerCase())
+            .maybeSingle();
+            
+          if (userData) {
+            setIsPublic(!!userData.is_public_leaderboard);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    fetchLeaderboard();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [address]);
+
+  const togglePublic = async () => {
+    if (!address) return;
+    const newValue = !isPublic;
+    setIsPublic(newValue); // Optimistic update
+    
+    try {
+      const { data } = await supabase.from('users').select('wallet_address').eq('wallet_address', address.toLowerCase()).maybeSingle();
+      if (!data) {
+        await supabase.from('users').insert({ wallet_address: address.toLowerCase(), is_public_leaderboard: newValue });
+      } else {
+        await supabase.from('users').update({ is_public_leaderboard: newValue }).eq('wallet_address', address.toLowerCase());
+      }
+    } catch (err) {
+      console.error('Failed to update public status:', err);
+      setIsPublic(!newValue); // Revert
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -44,7 +122,7 @@ export function Leaderboard() {
             <div className="text-center sm:text-right">
                <div className="text-sm text-white/60 mb-2">Share your performance publicly?</div>
                <button 
-                 onClick={() => setIsPublic(!isPublic)}
+                 onClick={togglePublic}
                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-colors \${isPublic ? 'bg-white/10 text-white' : 'bg-accentPrimary text-deepNavy'}`}
                >
                  {isPublic ? 'Make Private' : 'Make Public & Opt-in'}
@@ -65,7 +143,14 @@ export function Leaderboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {MOCK_LEADERBOARD.map((user, index) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={4} className="p-12 text-center text-white/50">
+                      <div className="flex justify-center mb-4"><Loader2 className="w-8 h-8 animate-spin text-accentPrimary" /></div>
+                      Loading leaderboard data from Supabase...
+                    </td>
+                  </tr>
+                ) : leaderboardData.map((user, index) => (
                   <tr key={index} className="hover:bg-white/5 transition-colors group">
                     <td className="p-6">
                       {user.rank === 1 ? <Medal className="w-6 h-6 text-yellow-400" /> :

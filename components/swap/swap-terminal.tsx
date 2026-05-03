@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowDownUp, Settings, Info, Loader2 } from 'lucide-react';
+import { ArrowDownUp, Settings, Info, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAccount, useSendTransaction } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 
@@ -15,6 +15,9 @@ export function SwapTerminal() {
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quoteData, setQuoteData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [txMessage, setTxMessage] = useState<string | null>(null);
 
   // Hardcoded for Demo: ETH on Mainnet -> USDC on Arbitrum
   const fromChain = 'ETH';
@@ -35,9 +38,16 @@ export function SwapTerminal() {
 
       setIsFetchingQuote(true);
       setError(null);
+      setTxStatus('idle');
+      setTxMessage(null);
       
       try {
-        const fromAmountWei = parseUnits(payAmount, fromDecimals).toString();
+        let fromAmountWei;
+        try {
+          fromAmountWei = parseUnits(payAmount, fromDecimals).toString();
+        } catch (e: any) {
+          throw new Error('Invalid input amount. Please check the number of decimals.');
+        }
         
         // Li.Fi API Request
         // Note: Using public endpoint without API key can be rate-limited
@@ -46,8 +56,8 @@ export function SwapTerminal() {
         const response = await fetch(url);
         
         if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.message || 'Failed to fetch route');
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || 'Failed to fetch route. Route may not be available for this pair.');
         }
 
         const data = await response.json();
@@ -77,6 +87,9 @@ export function SwapTerminal() {
   const handleSwap = async () => {
     if (!quoteData || !address) return;
     
+    setTxStatus('pending');
+    setTxMessage('Please confirm the transaction in your wallet...');
+    
     try {
       const tx = await sendTransactionAsync({
         to: quoteData.transactionRequest.to,
@@ -86,11 +99,18 @@ export function SwapTerminal() {
         gas: BigInt(quoteData.transactionRequest.gasLimit)
       });
       console.log('Tx submitted:', tx);
-      alert(`Transaction submitted! Hash: ${tx}`);
-    } catch (err) {
+      setTxStatus('success');
+      setTxMessage(`Transaction submitted successfully! Hash: ${tx}`);
+    } catch (err: any) {
       console.error('Swap Error:', err);
-      // In production, we would use a toast notification here
-      alert('Transaction failed or was rejected.');
+      setTxStatus('error');
+      if (err.message && err.message.toLowerCase().includes('user rejected')) {
+        setTxMessage('Transaction was rejected in your wallet.');
+      } else if (err.message && err.message.toLowerCase().includes('insufficient funds')) {
+        setTxMessage('Insufficient funds for gas or swap amount.');
+      } else {
+        setTxMessage(err.message || 'Transaction failed. Please try again.');
+      }
     }
   };
   
@@ -168,18 +188,20 @@ export function SwapTerminal() {
       <div className="mt-6">
         <button 
           onClick={handleSwap}
-          disabled={!isConnected || !payAmount || isFetchingQuote || !!error}
+          disabled={!isConnected || !payAmount || isFetchingQuote || !!error || txStatus === 'pending'}
           className="w-full bg-accentPrimary hover:bg-accentSecondary text-deepNavy font-bold py-4 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 disabled:hover:bg-accentPrimary hover:shadow-[0_0_20px_rgba(72,202,228,0.4)] disabled:hover:shadow-none"
         >
           {!isConnected 
             ? 'Connect Wallet to Swap' 
-            : isFetchingQuote
-              ? 'Finding best route...'
-              : error
-                ? 'Route not available'
-                : !payAmount 
-                  ? 'Enter an amount' 
-                  : 'Review & Swap'}
+            : txStatus === 'pending'
+              ? 'Confirming in Wallet...'
+              : isFetchingQuote
+                ? 'Finding best route...'
+                : error
+                  ? 'Route not available'
+                  : !payAmount 
+                    ? 'Enter an amount' 
+                    : 'Review & Swap'}
         </button>
       </div>
 
@@ -199,9 +221,26 @@ export function SwapTerminal() {
         </div>
       )}
       
-      {error && !isFetchingQuote && payAmount && (
-         <div className="mt-4 p-3 tracking-tight rounded-xl bg-red-500/10 border border-red-500/20 text-red-200/80 text-sm font-medium">
-           {error}
+      {txStatus === 'error' && (
+         <div className="mt-4 p-4 tracking-tight rounded-xl bg-red-500/10 border border-red-500/20 text-red-200/90 text-sm font-medium flex items-start gap-3">
+           <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+           <div className="break-all">{txMessage}</div>
+         </div>
+      )}
+
+      {txStatus === 'success' && (
+         <div className="mt-4 p-4 tracking-tight rounded-xl bg-green-500/10 border border-green-500/20 text-green-200/90 text-sm font-medium flex items-start gap-3">
+           <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+           <div className="break-all">{txMessage}</div>
+         </div>
+      )}
+
+      {error && !isFetchingQuote && payAmount && txStatus !== 'error' && (
+         <div className="mt-4 p-4 tracking-tight rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-sm font-medium flex items-start gap-3">
+           <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+           <div className="break-words">
+             {error === 'Network Error' ? 'Network error: Please check your connection and try again.' : error}
+           </div>
          </div>
       )}
     </div>

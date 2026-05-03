@@ -15,6 +15,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
+import { supabase } from '@/lib/supabase';
 
 ChartJS.register(
   CategoryScale,
@@ -32,26 +33,72 @@ export function ProDashboard() {
   const [isPro, setIsPro] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Simulate checking for a Pro NFT or subscription
+  // Check for a Pro status in Supabase
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isConnected) {
-      // Don't set isChecking here if we initialized it to true anyway
-      timer = setTimeout(() => {
-        // Just for demo purposes, let's say they don't have it initially
-        setIsPro(false);
-        setIsChecking(false);
-      }, 1500);
-    } else {
-      timer = setTimeout(() => {
-        setIsPro(false);
-        setIsChecking(false);
-      }, 0);
-    }
+    let isMounted = true;
+    
+    const checkProStatus = async () => {
+      if (!isConnected || !address) {
+        if (isMounted) {
+          setIsPro(false);
+          setIsChecking(false);
+        }
+        return;
+      }
+
+      try {
+        setIsChecking(true);
+        const { data, error } = await supabase
+          .from('users')
+          .select('is_pro')
+          .eq('wallet_address', address.toLowerCase())
+          .maybeSingle();
+
+        if (isMounted) {
+          if (!data) {
+             // User doesn't exist yet, insert them
+             await supabase.from('users').insert({ wallet_address: address.toLowerCase(), is_pro: false });
+             setIsPro(false);
+          } else {
+             setIsPro(!!data.is_pro);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching pro status:', err);
+      } finally {
+        if (isMounted) {
+          setIsChecking(false);
+        }
+      }
+    };
+
+    checkProStatus();
+
     return () => {
-      if (timer) clearTimeout(timer);
+      isMounted = false;
     };
   }, [isConnected, address]);
+
+  const handleMintPro = async () => {
+    if (!address) return;
+    
+    try {
+      setIsChecking(true);
+      // Mocking the payment, but updating the real database
+      const { error } = await supabase
+        .from('users')
+        .update({ is_pro: true })
+        .eq('wallet_address', address.toLowerCase());
+        
+      if (!error) {
+        setIsPro(true);
+      }
+    } catch (err) {
+      console.error('Error upgrading to pro', err);
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   if (!isConnected) {
     return (
@@ -104,7 +151,7 @@ export function ProDashboard() {
         </div>
 
         <button 
-          onClick={() => setIsPro(true)} // Mocking upgrading for the demo
+          onClick={handleMintPro}
           className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-deepNavy font-bold py-4 px-12 rounded-xl transition-all shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95"
         >
           Mint Pro Pass (0.05 ETH)
