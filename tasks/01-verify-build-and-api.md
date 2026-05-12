@@ -1,14 +1,21 @@
 # Task 01: Verify Build and API Keys
 
-Hello team member! Here is your first manual task. 
+## Status Update (2026-05-12)
 
-## Context
-During Phase 1/Phase 2 initialization, we encountered some infrastructure timeouts on the platform, and a Next.js compilation error indicating `Module not found: Can't resolve 'accounts'` from Wagmi/RainbowKit.
+### What was checked
+1. Attempted `npm install` in agent environment.
+2. Reconfirmed lockfile and manifest alignment for wallet dependencies.
+3. Confirmed user report: Vercel deploy/install path is now working.
 
-We also need to prepare for integrating the Li.Fi API in Phase 2.
+### Findings
+- Local agent environment remains blocked by npm registry access (`403 Forbidden` on `wagmi` package fetch).
+- Dependency mismatch issue itself is resolved in repository manifests (`wagmi` aligned with RainbowKit peer requirement).
+- Because local install is blocked, local lint/build can’t be executed in this environment.
 
-## Steps for you to complete:
-1. **Refresh and check the preview**: Does the app load successfully on your end, or are you still seeing the `accounts` module error? If you see the error, let me know so we can try a different webpack configuration or update the package versions.
-2. **Li.Fi API Key**: For Phase 2 (Swaps & Bridging), we can use the Li.Fi API. While they have a public tier, could you let me know if you want to use a free public endpoint, or if you prefer to grab your own API key from Li.Fi / 1inch and add it to our `.env.example`?
+### Li.Fi API key recommendation
+- Development: public endpoint is acceptable for prototype work.
+- Production: use dedicated Li.Fi key (and optional 1inch fallback), route through server endpoint, and apply request quotas/policies.
 
-Please drop a message here once you have an update on these!
+### Next action
+- Execute `npm install && npm run lint && npm run build` in the unrestricted/Vercel environment.
+- If green, mark WS1-03 complete and proceed to WS2-01.

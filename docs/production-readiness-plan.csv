@@ -1,0 +1,15 @@
+task_id,workstream,task,owner,status,priority,dependencies,acceptance_criteria
+WS1-01,Build & Dependency Stabilization,Align wallet stack dependency versions (RainbowKit/Wagmi/viem),AI,completed,P0,,npm install succeeds without peer conflicts
+WS1-02,Build & Dependency Stabilization,Regenerate package-lock.json with deterministic install,AI,completed,P0,WS1-01,Lockfile updates committed and clean install reproducible
+WS1-03,Build & Dependency Stabilization,Run build+lint verification and document outcomes,AI,in_progress,P0,WS1-02,npm run build and npm run lint pass
+WS2-01,Environment/Secrets Hardening,Add runtime env validation for required public/server keys,AI,pending,P0,WS1-03,App fails fast with clear messages on missing critical env vars
+WS2-02,Environment/Secrets Hardening,Expand .env.example for Li.Fi/1inch/Supabase/WalletConnect variables,AI,pending,P1,WS2-01,All required keys documented with purpose and examples
+WS3-01,Swap Engine Reliability & Security,Move quote retrieval to server route with input validation,AI,pending,P0,WS1-03,No direct browser call to quote provider for privileged flows
+WS3-02,Swap Engine Reliability & Security,Add chain/token selectors and slippage/deadline controls,AI,pending,P1,WS3-01,User-configurable parameters with sane defaults and validation
+WS3-03,Swap Engine Reliability & Security,Implement transaction simulation + explicit risk warnings,AI,pending,P1,WS3-01,Preflight simulation result displayed before submission
+WS4-01,Data Layer & Supabase Hardening,Introduce typed Supabase client and repository helpers,AI,pending,P1,WS2-01,No raw any-typed DB calls in UI components
+WS4-02,Data Layer & Supabase Hardening,Audit and enforce RLS policies for all user tables,AI,pending,P0,WS4-01,Policy checks documented and tested
+WS5-01,Smart Contract Safety Baseline,Add Foundry/Hardhat tests for vault deposits/withdrawals/strategy ops,AI,pending,P0,WS1-03,Core contract behavior covered by automated tests
+WS5-02,Smart Contract Safety Baseline,Add pause/guardrails and strategy validation checks,AI,pending,P1,WS5-01,Emergency controls and strategy checks implemented
+WS6-01,QA CI/CD Observability,Create CI workflow for install lint build test,AI,pending,P0,WS1-03,PR checks required and passing
+WS6-02,QA CI/CD Observability,Integrate error tracking and request/tx telemetry,AI,pending,P1,WS3-01,Key user flows emit actionable traces and alerts

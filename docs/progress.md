@@ -3,17 +3,18 @@
 ## Project Vision
 BagFi is a unified Web3 asset platform that consolidates fragmented crypto portfolios into automated, thematic "Smart Bags" (one-click yield-generating portfolios).
 
-## Current Status
-- **Phase 1: Foundation & The Aggregator Core** - Mostly completed. Unification dashboard created with placeholder data. Wallet connection (wagmi + RainbowKit) established.
-- **Phase 2: Execution Engine** - Currently working on this. Swap page has been created, but we need to implement the actual `SwapTerminal` component that uses Li.Fi or 1inch for bridging and routing.
-- **Issues Encountered**:
-  - `Can't resolve 'accounts'` during wagmi/viem compilation (attempted to add to webpack externals).
-  - Infrastructure file-system timeouts preventing full build cycles (being monitored).
+## Current Status (Updated: 2026-05-12)
+- **WS1-01 (Dependency alignment)**: Completed via RainbowKit/Wagmi major-version alignment.
+- **WS1-02 (Lockfile sync)**: Completed by syncing lockfile dependency declarations.
+- **WS1-03 (Build + lint verification)**: In progress.
 
-## Next Steps for AI
-1. Build the `/components/swap/swap-terminal.tsx` interface.
-2. Integrate Li.Fi or 1inch SDK/API for quote fetching.
-3. Handle transaction simulation and pending states.
+## Verification Notes
+- Task management format updated: one Markdown file per task under `tasks/` with task name and implementation details.
+- Added webpack alias to disable optional `@react-native-async-storage/async-storage` resolution from MetaMask SDK browser bundle, addressing Vercel build warning path.
+- User-reported Vercel deployment now works after dependency/lock alignment.
+- In this execution environment, npm registry access is blocked (`403`), so local `npm install`, `npm run lint`, and `npm run build` cannot be fully validated here.
 
-## User Constraints
-- Assign tasks to the user via the `/tasks/` directory if manual intervention, external API keys, or verification is needed.
+## Next Execution Steps
+1. Run install/lint/build in your Vercel-connected or unrestricted environment.
+2. Capture command outputs and mark WS1-03 as completed if both checks pass.
+3. Start WS2-01 (runtime env validation) in the next implementation PR.
