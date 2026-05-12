@@ -1,14 +1,22 @@
 # Task 01: Verify Build and API Keys
 
-Hello team member! Here is your first manual task. 
+## Status Update (2026-05-12)
 
-## Context
-During Phase 1/Phase 2 initialization, we encountered some infrastructure timeouts on the platform, and a Next.js compilation error indicating `Module not found: Can't resolve 'accounts'` from Wagmi/RainbowKit.
+### What was checked
+1. Attempted `npm run build` directly.
+2. Attempted dependency installation via `npm install`.
+3. Identified compatibility mismatch in wallet stack dependencies.
 
-We also need to prepare for integrating the Li.Fi API in Phase 2.
+### Findings
+- `npm run build` currently fails because Next.js binary is unavailable before install.
+- `npm install` initially failed with peer conflict:
+  - `@rainbow-me/rainbowkit@2.2.10` requires `wagmi@^2.9.0`
+  - project had `wagmi@^3.6.5`
+- After setting `wagmi` to `^2.19.5`, installation is still blocked in this environment by `403 Forbidden` fetching `@wagmi/connectors` from npm registry (policy/access restriction).
 
-## Steps for you to complete:
-1. **Refresh and check the preview**: Does the app load successfully on your end, or are you still seeing the `accounts` module error? If you see the error, let me know so we can try a different webpack configuration or update the package versions.
-2. **Li.Fi API Key**: For Phase 2 (Swaps & Bridging), we can use the Li.Fi API. While they have a public tier, could you let me know if you want to use a free public endpoint, or if you prefer to grab your own API key from Li.Fi / 1inch and add it to our `.env.example`?
+### Li.Fi API key recommendation
+- For development: public endpoint can work but is rate-limited.
+- For real usage: use a dedicated Li.Fi API key (and optional 1inch backup) and route requests through a server endpoint for quota control and policy enforcement.
 
-Please drop a message here once you have an update on these!
+### Next action
+- Re-run `npm install` in an environment with npm registry access (or configured internal mirror), then run `npm run build` to complete verification.
