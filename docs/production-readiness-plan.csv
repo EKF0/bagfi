@@ -1,7 +1,7 @@
 task_id,workstream,task,owner,status,priority,dependencies,acceptance_criteria
-WS1-01,Build & Dependency Stabilization,Align wallet stack dependency versions (RainbowKit/Wagmi/viem),AI,completed,P0,,npm install succeeds without peer conflicts
-WS1-02,Build & Dependency Stabilization,Regenerate package-lock.json with deterministic install,AI,completed,P0,WS1-01,Lockfile updates committed and clean install reproducible
-WS1-03,Build & Dependency Stabilization,Run build+lint verification and document outcomes,AI,in_progress,P0,WS1-02,npm run build and npm run lint pass
+WS1-01,Build & Dependency Stabilization,Align wallet stack dependency versions (RainbowKit/Wagmi/viem),AI,in_progress,P0,,npm install succeeds without peer conflicts
+WS1-02,Build & Dependency Stabilization,Regenerate package-lock.json with deterministic install,AI,pending,P0,WS1-01,Lockfile updates committed and clean install reproducible
+WS1-03,Build & Dependency Stabilization,Run build+lint verification and document outcomes,AI,pending,P0,WS1-02,"npm run build and npm run lint pass"
 WS2-01,Environment/Secrets Hardening,Add runtime env validation for required public/server keys,AI,pending,P0,WS1-03,App fails fast with clear messages on missing critical env vars
 WS2-02,Environment/Secrets Hardening,Expand .env.example for Li.Fi/1inch/Supabase/WalletConnect variables,AI,pending,P1,WS2-01,All required keys documented with purpose and examples
 WS3-01,Swap Engine Reliability & Security,Move quote retrieval to server route with input validation,AI,pending,P0,WS1-03,No direct browser call to quote provider for privileged flows

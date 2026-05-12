@@ -9,8 +9,6 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - **WS1-03 (Build + lint verification)**: In progress.
 
 ## Verification Notes
-- Task management format updated: one Markdown file per task under `tasks/` with task name and implementation details.
-- Added webpack alias to disable optional `@react-native-async-storage/async-storage` resolution from MetaMask SDK browser bundle, addressing Vercel build warning path.
 - User-reported Vercel deployment now works after dependency/lock alignment.
 - In this execution environment, npm registry access is blocked (`403`), so local `npm install`, `npm run lint`, and `npm run build` cannot be fully validated here.
 

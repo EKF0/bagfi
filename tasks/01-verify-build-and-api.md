@@ -3,19 +3,20 @@
 ## Status Update (2026-05-12)
 
 ### What was checked
-1. Attempted `npm install` in agent environment.
-2. Reconfirmed lockfile and manifest alignment for wallet dependencies.
-3. Confirmed user report: Vercel deploy/install path is now working.
+1. Attempted `npm run build` directly.
+2. Attempted dependency installation via `npm install`.
+3. Identified compatibility mismatch in wallet stack dependencies.
 
 ### Findings
-- Local agent environment remains blocked by npm registry access (`403 Forbidden` on `wagmi` package fetch).
-- Dependency mismatch issue itself is resolved in repository manifests (`wagmi` aligned with RainbowKit peer requirement).
-- Because local install is blocked, local lint/build can’t be executed in this environment.
+- `npm run build` currently fails because Next.js binary is unavailable before install.
+- `npm install` initially failed with peer conflict:
+  - `@rainbow-me/rainbowkit@2.2.10` requires `wagmi@^2.9.0`
+  - project had `wagmi@^3.6.5`
+- After setting `wagmi` to `^2.19.5`, installation is still blocked in this environment by `403 Forbidden` fetching `@wagmi/connectors` from npm registry (policy/access restriction).
 
 ### Li.Fi API key recommendation
-- Development: public endpoint is acceptable for prototype work.
-- Production: use dedicated Li.Fi key (and optional 1inch fallback), route through server endpoint, and apply request quotas/policies.
+- For development: public endpoint can work but is rate-limited.
+- For real usage: use a dedicated Li.Fi API key (and optional 1inch backup) and route requests through a server endpoint for quota control and policy enforcement.
 
 ### Next action
-- Execute `npm install && npm run lint && npm run build` in the unrestricted/Vercel environment.
-- If green, mark WS1-03 complete and proceed to WS2-01.
+- Re-run `npm install` in an environment with npm registry access (or configured internal mirror), then run `npm run build` to complete verification.
