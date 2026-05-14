@@ -16,7 +16,7 @@ WS6-02,QA CI/CD Observability,Integrate error tracking and request/tx telemetry,
 SOL0-01,Bags/Solana Product Alignment,Define Smart Bag guardrails for Bags.fm integration,AI,completed,P0,,"Product spec preserves Smart Bags as curated portfolios; token launch tooling is explicitly non-MVP"
 SOL0-02,Bags/Solana Product Alignment,Audit EVM assumptions and Solana replacement map,AI,completed,P0,SOL0-01,"RainbowKit/Wagmi/LiFi/ERC4626 assumptions mapped to Solana wallet/Bags/RPC equivalents"
 SOL1-01,Solana Foundation,Add Solana and Bags environment validation,AI,completed,P0,SOL0-02,"Server-only BAGS_API_KEY plus RPC, websocket, cluster, and optional indexer keys documented and validated"
-SOL1-02,Solana Foundation,Create typed server-side Bags API client,AI,pending,P0,SOL1-01,"Bags requests go through one server wrapper with x-api-key auth, success/error normalization, retries, and rate-limit telemetry"
+SOL1-02,Solana Foundation,Create typed server-side Bags API client,AI,completed,P0,SOL1-01,"Bags requests go through one server wrapper with x-api-key auth, success/error normalization, retries, and rate-limit telemetry"
 SOL1-03,Solana Foundation,Replace EVM wallet provider with Solana Wallet Standard provider,AI,pending,P0,SOL1-01,"Phantom/Solflare/Backpack-compatible connect, disconnect, address display, and cluster handling work in Next.js"
 SOL1-04,Solana Foundation,Normalize Solana wallet identity across app and database,AI,pending,P0,SOL1-03,"Base58 wallet addresses replace Ethereum address assumptions in user and portfolio flows"
 SOL2-01,Bags Trade Engine,Add Bags quote API route for Solana token swaps,AI,pending,P0,SOL1-02,"Route validates inputMint, outputMint, amount, slippage mode, and returns quote details without exposing API key"

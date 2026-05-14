@@ -39,6 +39,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL0-01** | ✅ completed | Smart Bag guardrails defined for Bags.fm integration |
 | **SOL0-02** | ✅ completed | EVM assumptions audited, 52 items mapped to Solana equivalents |
 | **SOL1-01** | ✅ completed | Solana and Bags environment validation added |
+| **SOL1-02** | ✅ completed | Typed Bags API client with retries and rate limiting |
 
 ---
 
@@ -49,6 +50,23 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
 
+### 2026-05-14 — SOL1-02 completed
+- Created `lib/bags/client.ts` with comprehensive typed Bags API client
+- Implemented server-side only wrapper with `x-api-key` authentication
+- Added exponential backoff retry logic (3 retries with 1s base delay)
+- Rate limit tracking from response headers with warnings when low
+- Success/error response normalization with `BagsApiError` class
+- Request ID tracking for observability and debugging
+- Implemented typed methods for 6 Bags API endpoints:
+  - `getTradeQuote` - GET /trade/quote with slippage and route plan
+  - `createSwapTransaction` - POST /trade/swap with base64 transaction
+  - `getTokenLaunchFeed` - GET /token-launch/feed with pagination
+  - `getBagsPools` - GET /solana/bags/pools with APR data
+  - `getClaimablePositions` - GET /claimable-positions
+  - `healthCheck` - GET /ping for connectivity
+- All requests go through single `bagsRequest()` function
+- Rate limit utilities: `getRateLimitStatus()`, `isRateLimitLow()`
+
 ### 2026-05-14 — SOL1-01 completed
 - Updated `.env.example` with Solana and Bags.fm configuration variables
 - Added `NEXT_PUBLIC_SOLANA_RPC_URL`, `NEXT_PUBLIC_SOLANA_NETWORK`, `NEXT_PUBLIC_SOLANA_WS_ENDPOINT`
@@ -58,6 +76,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Updated `lib/env.js` with comprehensive validation:
   - Validates Solana required vars and network values
   - Validates Bags server-side vars
+  - Network value validation (mainnet-beta/devnet/testnet)
   - Security check ensures BAGS_API_KEY never exposed client-side
   - Added `validateServerEnvironment()` for API route usage
 - Updated `.env` with test values for development
