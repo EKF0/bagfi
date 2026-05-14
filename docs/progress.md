@@ -37,7 +37,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **WS6-01** | ✅ completed | CI workflow created and passing |
 | **WS6-02** | ✅ completed | Error tracking and telemetry integrated into swap flow and quote requests |
 | **SOL0-01** | ✅ completed | Smart Bag guardrails defined for Bags.fm integration |
-| **SOL0-02** | 🔧 pending | Depends on SOL0-01 |
+| **SOL0-02** | ✅ completed | EVM assumptions audited, 52 items mapped to Solana equivalents |
 
 ---
 
@@ -47,6 +47,20 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL0-02 completed
+- Created `docs/evm-to-solana-audit.md` with comprehensive migration audit
+- Audited 25+ source files across app/, components/, lib/, contracts/, test/
+- Identified 52 distinct EVM-specific items requiring migration across 6 categories:
+  - Wallet/Connection (8 items): RainbowKit/Wagmi → Solana Wallet Adapter
+  - Blockchain Interaction (9 items): viem/ethers → @solana/web3.js
+  - Smart Contracts (12 items): Solidity/ERC-4626 → Anchor/Rust programs
+  - API/Quotes (8 items): Li.Fi → Jupiter API
+  - Data/Types (8 items): EVM hex addresses → base58 Solana addresses
+  - UI Components (12 items): Chain badges, token selectors, terminology updates
+- Flagged critical data integrity issue: `.toLowerCase()` on wallet addresses in `lib/database.ts` will corrupt base58 addresses
+- Documented 5 high-risk architecture decisions requiring team input
+- Provided file-by-file migration checklist and recommended Solana dependency stack
 
 ### 2026-05-14 — SOL0-01 completed
 - Created `docs/guardrails.md` with comprehensive Smart Bag guardrails for Bags.fm integration
