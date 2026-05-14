@@ -15,7 +15,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 
 ChartJS.register(
   CategoryScale,
@@ -46,30 +46,26 @@ export function ProDashboard() {
         return;
       }
 
-      try {
-        setIsChecking(true);
-        const { data, error } = await supabase
-          .from('users')
-          .select('is_pro')
-          .eq('wallet_address', address.toLowerCase())
-          .maybeSingle();
-
-        if (isMounted) {
-          if (!data) {
-             // User doesn't exist yet, insert them
-             await supabase.from('users').insert({ wallet_address: address.toLowerCase(), is_pro: false });
-             setIsPro(false);
-          } else {
-             setIsPro(!!data.is_pro);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching pro status:', err);
-      } finally {
-        if (isMounted) {
-          setIsChecking(false);
-        }
-      }
+       try {
+         setIsChecking(true);
+         const existingUser = await db.users.findByWalletAddress(address);
+         
+         if (isMounted) {
+           if (!existingUser) {
+              // User doesn't exist yet, insert them
+              await db.users.createUser(address, false);
+              setIsPro(false);
+           } else {
+              setIsPro(!!existingUser.is_pro);
+           }
+         }
+       } catch (err) {
+         console.error('Error fetching pro status:', err);
+       } finally {
+         if (isMounted) {
+           setIsChecking(false);
+         }
+       }
     };
 
     checkProStatus();
@@ -82,22 +78,16 @@ export function ProDashboard() {
   const handleMintPro = async () => {
     if (!address) return;
     
-    try {
-      setIsChecking(true);
-      // Mocking the payment, but updating the real database
-      const { error } = await supabase
-        .from('users')
-        .update({ is_pro: true })
-        .eq('wallet_address', address.toLowerCase());
-        
-      if (!error) {
-        setIsPro(true);
-      }
-    } catch (err) {
-      console.error('Error upgrading to pro', err);
-    } finally {
-      setIsChecking(false);
-    }
+     try {
+       setIsChecking(true);
+       // Mocking the payment, but updating the real database
+       await db.users.updateProStatus(address, true);
+       setIsPro(true);
+     } catch (err) {
+       console.error('Error upgrading to pro', err);
+     } finally {
+       setIsChecking(false);
+     }
   };
 
   if (!isConnected) {

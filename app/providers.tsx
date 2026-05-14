@@ -9,8 +9,14 @@ import {
 import { wagmiAdapter } from './wagmi-config';
 import { WagmiProvider } from 'wagmi';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
+import { validateEnvironment } from '@/lib/env';
 
 const queryClient = new QueryClient();
+
+// Validate environment variables on client startup
+if (typeof window !== 'undefined') {
+  validateEnvironment();
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

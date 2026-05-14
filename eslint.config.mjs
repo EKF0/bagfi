@@ -1,4 +1,4 @@
-import { defineConfig } from "eslint/config";
+import { defineConfig } from "eslint";
 import next from "eslint-config-next";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

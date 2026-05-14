@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { Trophy, Medal, MapPin, ExternalLink, Share2, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 
 const MOCK_LEADERBOARD = [
   { rank: 1, address: 'vitalik.eth', yield: '+42.5%', tvl: '$1.2M', tags: ['DeFi Degen', 'Whale'] },
@@ -23,52 +23,47 @@ export function Leaderboard() {
   useEffect(() => {
     let isMounted = true;
     
-    const fetchLeaderboard = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('wallet_address, is_public_leaderboard')
-          .eq('is_public_leaderboard', true);
-          
-        if (data && isMounted) {
-          // In a real app we would have real yield data
-          // For now, let's format the DB users like the mock users and prepend them
-          const realUsers = data.map((u, i) => ({
-            rank: i + 1,
-            address: u.wallet_address.substring(0, 6) + '...' + u.wallet_address.substring(38),
-            yield: '+12.4%', // Dummy yield
-            tvl: '$' + (Math.random() * 10).toFixed(1) + 'K',
-            tags: ['Community Member']
-          }));
-          
-          if (realUsers.length > 0) {
-            // Re-rank everyone
-            const combined = [...realUsers, ...MOCK_LEADERBOARD].map((u, i) => ({
-               ...u, rank: i + 1
-            }));
-            setLeaderboardData(combined);
-          }
-        }
-        
-        if (address && isMounted) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('is_public_leaderboard')
-            .eq('wallet_address', address.toLowerCase())
-            .maybeSingle();
-            
-          if (userData) {
-            setIsPublic(!!userData.is_public_leaderboard);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+     const fetchLeaderboard = async () => {
+       try {
+         const { data: publicUsers, error } = await db.users.findManyByPublicLeaderboard(true);
+         
+         if (error) throw error;
+         
+         if (isMounted) {
+           // In a real app we would have real yield data
+           // For now, let's format the DB users like the mock users and prepend them
+           const realUsers = publicUsers.map((u: any, i: number) => ({
+             rank: i + 1,
+             address: u.wallet_address.substring(0, 6) + '...' + u.wallet_address.substring(38),
+             yield: '+12.4%', // Dummy yield
+             tvl: '$' + (Math.random() * 10).toFixed(1) + 'K',
+             tags: ['Community Member']
+           }));
+           
+           if (realUsers.length > 0) {
+             // Re-rank everyone
+             const combined = [...realUsers, ...MOCK_LEADERBOARD].map((u, i) => ({
+                ...u, rank: i + 1
+             }));
+             setLeaderboardData(combined);
+           }
+         }
+         
+         if (address && isMounted) {
+           const userData = await db.users.findByWalletAddress(address);
+           
+           if (userData) {
+             setIsPublic(!!userData.is_public_leaderboard);
+           }
+         }
+       } catch (err) {
+         console.error(err);
+       } finally {
+         if (isMounted) {
+           setIsLoading(false);
+         }
+       }
+     };
     
     fetchLeaderboard();
     
@@ -77,23 +72,23 @@ export function Leaderboard() {
     };
   }, [address]);
 
-  const togglePublic = async () => {
-    if (!address) return;
-    const newValue = !isPublic;
-    setIsPublic(newValue); // Optimistic update
-    
-    try {
-      const { data } = await supabase.from('users').select('wallet_address').eq('wallet_address', address.toLowerCase()).maybeSingle();
-      if (!data) {
-        await supabase.from('users').insert({ wallet_address: address.toLowerCase(), is_public_leaderboard: newValue });
-      } else {
-        await supabase.from('users').update({ is_public_leaderboard: newValue }).eq('wallet_address', address.toLowerCase());
-      }
-    } catch (err) {
-      console.error('Failed to update public status:', err);
-      setIsPublic(!newValue); // Revert
-    }
-  };
+     const togglePublic = async () => {
+     if (!address) return;
+     const newValue = !isPublic;
+     setIsPublic(newValue); // Optimistic update
+     
+     try {
+       const existingUser = await db.users.findByWalletAddress(address);
+       if (!existingUser) {
+         await db.users.createUser(address, false, newValue);
+       } else {
+         await db.users.updatePublicLeaderboardStatus(address, newValue);
+       }
+     } catch (err) {
+       console.error('Failed to update public status:', err);
+       setIsPublic(!newValue); // Revert
+     }
+   };
 
   return (
     <div className="max-w-4xl mx-auto">
