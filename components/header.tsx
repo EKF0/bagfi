@@ -1,4 +1,4 @@
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Layers } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,7 +27,7 @@ export function Header() {
           </Link>
         </nav>
         <div className="ml-auto flex items-center space-x-4">
-          <ConnectButton />
+          <WalletMultiButton className="!bg-accentPrimary !text-deepNavy hover:!bg-accentSecondary font-bold py-2 px-4 rounded-xl transition-all" />
         </div>
       </div>
     </header>
