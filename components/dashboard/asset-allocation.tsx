@@ -1,6 +1,6 @@
 'use client';
 
-import { useAccount } from 'wagmi';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { useMemo } from 'react';
@@ -8,11 +8,11 @@ import { useMemo } from 'react';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export function AssetAllocation() {
-  const { isConnected } = useAccount();
+  const { connected } = useWallet();
 
   const data = useMemo(() => {
     return {
-      labels: ['ETH', 'USDC', 'ARB', 'OP'],
+      labels: ['SOL', 'USDC', 'JUP', 'BONK'],
       datasets: [
         {
           data: [6500, 4200, 1100, 650.75],
@@ -70,7 +70,7 @@ export function AssetAllocation() {
     }
   };
 
-  if (!isConnected) {
+  if (!connected) {
     return (
       <div className="glass-card p-6 min-h-[300px] flex items-center justify-center opacity-50">
         <p className="text-white/50 text-sm">Connect wallet to view allocation</p>
@@ -89,7 +89,7 @@ export function AssetAllocation() {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-24">
           <div className="text-center">
             <span className="block text-white/50 text-xs font-medium">Top Asset</span>
-            <span className="block font-display text-xl font-bold">ETH</span>
+            <span className="block font-display text-xl font-bold">SOL</span>
             <span className="block text-accentPrimary text-sm">52%</span>
           </div>
         </div>

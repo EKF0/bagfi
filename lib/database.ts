@@ -88,7 +88,7 @@ export const db = {
         const { data, error } = await supabase
           .from('users')
           .select('*')
-          .eq('wallet_address', walletAddress.toLowerCase())
+          .eq('wallet_address', walletAddress)
           .maybeSingle();
        
         if (error) throw error;
@@ -106,7 +106,7 @@ export const db = {
         const { data, error } = await supabase
           .from('users')
           .insert({
-            wallet_address: walletAddress.toLowerCase(),
+            wallet_address: walletAddress,
             is_pro: isPro,
             is_public_leaderboard: isPublicLeaderboard
           })
@@ -121,7 +121,7 @@ export const db = {
         const { data, error } = await supabase
           .from('users')
           .update({ is_pro: isPro })
-          .eq('wallet_address', walletAddress.toLowerCase())
+          .eq('wallet_address', walletAddress)
           .select()
           .single();
        
@@ -133,7 +133,7 @@ export const db = {
         const { data, error } = await supabase
           .from('users')
           .update({ is_public_leaderboard: isPublic })
-          .eq('wallet_address', walletAddress.toLowerCase())
+          .eq('wallet_address', walletAddress)
           .select()
           .single();
        
@@ -148,7 +148,7 @@ export const db = {
       const { data, error } = await supabase
         .from('portfolio_snapshots')
         .insert({
-          wallet_address: walletAddress.toLowerCase(),
+          wallet_address: walletAddress,
           total_value_usd: totalValueUsd
         })
         .select()
@@ -162,7 +162,7 @@ export const db = {
       const { data, error } = await supabase
         .from('portfolio_snapshots')
         .select('*')
-        .eq('wallet_address', walletAddress.toLowerCase())
+        .eq('wallet_address', walletAddress)
         .order('snapshot_date', { ascending: false })
         .limit(limit);
       

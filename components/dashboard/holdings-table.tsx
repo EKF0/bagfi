@@ -1,19 +1,19 @@
 'use client';
 
-import { useAccount } from 'wagmi';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { ArrowUpDown } from 'lucide-react';
 
 const MOCK_HOLDINGS = [
-  { id: 1, symbol: 'ETH', name: 'Ethereum', balance: '2.5', valueUSD: 6500, chain: 'Ethereum', chainColor: 'bg-blue-600' },
-  { id: 2, symbol: 'USDC', name: 'USD Coin', balance: '4200.00', valueUSD: 4200, chain: 'Arbitrum', chainColor: 'bg-indigo-500' },
-  { id: 3, symbol: 'ARB', name: 'Arbitrum', balance: '1250', valueUSD: 1100, chain: 'Arbitrum', chainColor: 'bg-indigo-500' },
-  { id: 4, symbol: 'OP', name: 'Optimism', balance: '340', valueUSD: 650.75, chain: 'Optimism', chainColor: 'bg-red-500' },
+  { id: 1, symbol: 'SOL', name: 'Solana', balance: '25.5', valueUSD: 6500, chain: 'Solana', chainColor: 'bg-gradient-to-br from-purple-500 to-blue-500' },
+  { id: 2, symbol: 'USDC', name: 'USD Coin', balance: '4200.00', valueUSD: 4200, chain: 'Solana', chainColor: 'bg-gradient-to-br from-purple-500 to-blue-500' },
+  { id: 3, symbol: 'JUP', name: 'Jupiter', balance: '1250', valueUSD: 1100, chain: 'Solana', chainColor: 'bg-gradient-to-br from-purple-500 to-blue-500' },
+  { id: 4, symbol: 'BONK', name: 'Bonk', balance: '5000000', valueUSD: 650.75, chain: 'Solana', chainColor: 'bg-gradient-to-br from-purple-500 to-blue-500' },
 ];
 
 export function HoldingsTable() {
-  const { isConnected } = useAccount();
+  const { connected } = useWallet();
 
-  if (!isConnected) {
+  if (!connected) {
     return null;
   }
 

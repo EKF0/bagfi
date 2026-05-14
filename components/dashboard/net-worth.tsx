@@ -1,28 +1,24 @@
 'use client';
 
-import { useAccount, useBalance, useEnsName } from 'wagmi';
-import { formatUnits } from 'viem';
-import { TrendingUp, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { TrendingUp, Wallet } from 'lucide-react';
 
 export function NetWorth() {
-  const { address, isConnected } = useAccount();
-  const { data: ensName } = useEnsName({ address });
+  const { connected, publicKey } = useWallet();
   
-  // Simulated mocked data since we are just aggregating
-  // In a real app, this would use a hook fetching from the indexer
   const isLoading = false;
   const totalValue = 12450.75;
   const dayChange = 450.20;
   const dayChangePct = +3.4;
 
-  if (!isConnected) {
+  if (!connected) {
     return (
       <div className="glass-card p-6 md:p-8 flex flex-col items-center justify-center min-h-[240px] text-center">
         <div className="h-12 w-12 rounded-full bg-surfaceCardBorder/50 flex items-center justify-center mb-4 text-white/50">
           <Wallet className="h-6 w-6" />
         </div>
         <h2 className="font-display text-2xl font-bold mb-2">Welcome to BagFi</h2>
-        <p className="text-white/60 max-w-md">Connect your wallet to view your fragmented balances unified in one place.</p>
+        <p className="text-white/60 max-w-md">Connect your Solana wallet to view your fragmented balances unified in one place.</p>
       </div>
     );
   }
@@ -55,12 +51,9 @@ export function NetWorth() {
 
         <div className="flex items-center gap-4 border-t border-surfaceCardBorder/50 pt-4 mt-auto">
           <div className="flex -space-x-2">
-            <ChainBadge bg="bg-blue-600" title="Ethereum" />
-            <ChainBadge bg="bg-indigo-500" title="Arbitrum" />
-            <ChainBadge bg="bg-red-500" title="Optimism" />
-            <ChainBadge bg="bg-blue-400" title="Base" />
+            <ChainBadge bg="bg-gradient-to-br from-purple-500 to-blue-500" title="Solana" />
           </div>
-          <span className="text-sm text-white/60">Across 4 networks</span>
+          <span className="text-sm text-white/60">On Solana</span>
         </div>
       </div>
     </div>
@@ -70,7 +63,7 @@ export function NetWorth() {
 function ChainBadge({ bg, title }: { bg: string; title: string }) {
   return (
     <div className={`h-8 w-8 rounded-full border-2 border-deepNavy flex items-center justify-center ${bg}`} title={title}>
-      {/* Placeholder for chain icons */}
+      <span className="text-xs font-bold text-white">S</span>
     </div>
   );
 }
