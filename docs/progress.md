@@ -38,6 +38,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **WS6-02** | ✅ completed | Error tracking and telemetry integrated into swap flow and quote requests |
 | **SOL0-01** | ✅ completed | Smart Bag guardrails defined for Bags.fm integration |
 | **SOL0-02** | ✅ completed | EVM assumptions audited, 52 items mapped to Solana equivalents |
+| **SOL1-01** | ✅ completed | Solana and Bags environment validation added |
 
 ---
 
@@ -47,6 +48,19 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL1-01 completed
+- Updated `.env.example` with Solana and Bags.fm configuration variables
+- Added `NEXT_PUBLIC_SOLANA_RPC_URL`, `NEXT_PUBLIC_SOLANA_NETWORK`, `NEXT_PUBLIC_SOLANA_WS_ENDPOINT`
+- Added `BAGS_API_KEY` (marked as server-only with security warnings)
+- Added optional `SOLANA_INDEXER_URL` and `SOLANA_INDEXER_API_KEY`
+- Marked EVM variables (WalletConnect, Li.Fi, 1inch) as deprecated
+- Updated `lib/env.js` with comprehensive validation:
+  - Validates Solana required vars and network values
+  - Validates Bags server-side vars
+  - Security check ensures BAGS_API_KEY never exposed client-side
+  - Added `validateServerEnvironment()` for API route usage
+- Updated `.env` with test values for development
 
 ### 2026-05-14 — SOL0-02 completed
 - Created `docs/evm-to-solana-audit.md` with comprehensive migration audit
