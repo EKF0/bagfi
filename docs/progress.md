@@ -41,6 +41,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL1-01** | ✅ completed | Solana and Bags environment validation added |
 | **SOL1-02** | ✅ completed | Typed Bags API client with retries and rate limiting |
 | **SOL1-03** | ✅ completed | Solana Wallet Adapter replacing RainbowKit/Wagmi |
+| **SOL1-04** | ✅ completed | Solana wallet identity normalized across app and database |
 
 ---
 
@@ -50,6 +51,18 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL1-04 completed
+- Normalized Solana wallet identity across app and database:
+  - Fixed critical bug: removed `.toLowerCase()` on base58 wallet addresses in lib/database.ts
+  - Updated leaderboard.tsx: useWallet hook, base58 addresses, Solana tokens
+  - Updated pro-dashboard.tsx: useWallet hook, SOL pricing instead of ETH
+  - Updated swap-terminal.tsx: Solana tokens (SOL, USDC, USDT, BONK, JUP)
+  - Updated net-worth.tsx: Solana chain badge, connect messaging
+  - Updated asset-allocation.tsx: Solana tokens in chart
+  - Updated holdings-table.tsx: Solana tokens and network
+- All mock data now uses Solana base58 addresses
+- Fixed address truncation for base58 format
 
 ### 2026-05-14 — SOL1-03 completed
 - Installed Solana wallet adapter packages: @solana/web3.js, @solana/wallet-adapter-react, @solana/spl-token
