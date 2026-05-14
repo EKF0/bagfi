@@ -1,3 +1,5 @@
+'use client';
+
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Layers } from 'lucide-react';
 import Link from 'next/link';

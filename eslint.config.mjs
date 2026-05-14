@@ -1,11 +1,18 @@
-import { defineConfig } from "eslint";
 import next from "eslint-config-next";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export default defineConfig([{
-    extends: [...next],
-}]);
+export default [
+  ...next,
+  {
+    ignores: [
+      "test/BagFiZapper.test.js",
+      "test/SmartBagVault.test.cjs",
+      ".next/",
+      "dist/",
+      "node_modules/",
+      "artifacts/",
+      "cache/",
+      "*.generated.ts",
+      "*.generated.js"
+    ]
+  }
+];

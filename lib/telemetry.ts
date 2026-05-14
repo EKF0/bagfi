@@ -1,124 +1,128 @@
-import * as Sentry from '@sentry/node';
+/**
+ * Telemetry utility
+ * Simple logging and tracking that works in both client and server environments
+ * TODO: Integrate @sentry/nextjs for production error tracking
+ */
 
-// Initialize Sentry if DSN is available
-if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-    tracesSampleRate: 1.0, // Capture 100% of transactions for performance monitoring
-    environment: process.env.NODE_ENV || 'development',
-    // Set sampling rate for error events - 1.0 = 100% of errors
-    sampleRate: 1.0,
-  });
+interface TelemetryEvent {
+  type: string;
+  message: string;
+  data?: Record<string, any>;
+  timestamp: string;
+}
+
+const events: TelemetryEvent[] = [];
+
+function logEvent(type: string, message: string, data?: Record<string, any>) {
+  const event: TelemetryEvent = {
+    type,
+    message,
+    data,
+    timestamp: new Date().toISOString()
+  };
+  
+  events.push(event);
+  
+  // Keep only last 100 events in memory
+  if (events.length > 100) {
+    events.shift();
+  }
+  
+  // Log to console in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Telemetry] ${type}: ${message}`, data || '');
+  }
+  
+  // TODO: Send to Sentry in production
+  // if (process.env.NEXT_PUBLIC_SENTRY_DSN && typeof window !== 'undefined') {
+  //   import('@sentry/nextjs').then(Sentry => {
+  //     Sentry.captureMessage(message, { extra: data });
+  //   });
+  // }
 }
 
 export const telemetry = {
   // Track API requests
   trackApiRequest: (endpoint: string, method: string, status: number, durationMs: number) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      Sentry.addBreadcrumb({
-        category: 'api.request',
-        message: `${method} ${endpoint}`,
-        data: {
-          endpoint,
-          method,
-          status_code: status,
-          duration_ms: durationMs,
-        },
-        type: 'http',
-      });
-      
-      // Also capture as a span for performance monitoring
-      const transaction = Sentry.startTransaction({
-        name: `${method} ${endpoint}`,
-        op: 'http.client',
-      });
-      transaction.setHttpStatus(status);
-      transaction.finish();
-    }
+    logEvent('api.request', `${method} ${endpoint}`, {
+      endpoint,
+      method,
+      status_code: status,
+      duration_ms: durationMs,
+    });
   },
   
   // Track transaction simulations
   trackTransactionSimulation: (simulationSuccess: boolean, error?: Error) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      if (simulationSuccess) {
-        Sentry.captureMessage('Transaction simulation successful');
-      } else {
-        Sentry.captureException(error || new Error('Transaction simulation failed'));
-      }
+    if (simulationSuccess) {
+      logEvent('simulation', 'Transaction simulation successful');
+    } else {
+      logEvent('simulation', 'Transaction simulation failed', {
+        error: error?.message
+      });
     }
   },
   
   // Track swap transactions
   trackSwapTransaction: (fromToken: string, toToken: string, amount: string, success: boolean, txHash?: string, error?: Error) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      if (success && txHash) {
-        Sentry.captureMessage(`Swap successful: ${amount} ${fromToken} → ${toToken}`, {
-          extra: {
-            fromToken,
-            toToken,
-            amount,
-            transactionHash: txHash,
-          }
-        });
-      } else {
-        Sentry.captureException(error || new Error('Swap transaction failed'), {
-          extra: {
-            fromToken,
-            toToken,
-            amount,
-          }
-        });
-      }
+    if (success && txHash) {
+      logEvent('swap.success', `Swap successful: ${amount} ${fromToken} → ${toToken}`, {
+        fromToken,
+        toToken,
+        amount,
+        transactionHash: txHash,
+      });
+    } else {
+      logEvent('swap.failed', 'Swap transaction failed', {
+        fromToken,
+        toToken,
+        amount,
+        error: error?.message
+      });
     }
   },
   
   // Track quote requests
   trackQuoteRequest: (fromChain: string, toChain: string, fromToken: string, toToken: string, amount: string, success: boolean, error?: Error) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      if (success) {
-        Sentry.addBreadcrumb({
-          category: 'quote.request',
-          message: `Quote fetched: ${amount} ${fromToken} (${fromChain}) → ${toToken} (${toChain})`,
-          data: {
-            fromChain,
-            toChain,
-            fromToken,
-            toToken,
-            amount,
-          },
-          type: 'info',
-        });
-      } else {
-        Sentry.captureException(error || new Error('Quote request failed'), {
-          extra: {
-            fromChain,
-            toChain,
-            fromToken,
-            toToken,
-            amount,
-          }
-        });
-      }
+    if (success) {
+      logEvent('quote.success', `Quote fetched: ${amount} ${fromToken} (${fromChain}) → ${toToken} (${toChain})`, {
+        fromChain,
+        toChain,
+        fromToken,
+        toToken,
+        amount,
+      });
+    } else {
+      logEvent('quote.failed', 'Quote request failed', {
+        fromChain,
+        toChain,
+        fromToken,
+        toToken,
+        amount,
+        error: error?.message
+      });
     }
   },
   
   // Track errors with context
   trackError: (error: Error, context?: Record<string, any>) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      Sentry.captureException(error, { extra: context });
-    }
+    logEvent('error', error.message, {
+      ...context,
+      stack: error.stack
+    });
   },
   
   // Track user interactions
   trackUserAction: (action: string, properties?: Record<string, any>) => {
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      Sentry.addBreadcrumb({
-        category: 'user.action',
-        message: action,
-        data: properties,
-        type: 'user',
-      });
-    }
+    logEvent('user.action', action, properties);
+  },
+  
+  // Get all events (for debugging)
+  getEvents: () => [...events],
+  
+  // Clear events
+  clearEvents: () => {
+    events.length = 0;
   }
 };
 

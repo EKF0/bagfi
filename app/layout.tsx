@@ -1,8 +1,7 @@
 import type {Metadata} from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
-import '@solana/wallet-adapter-react-ui/styles.css';
-import { Providers } from './providers';
+import { ClientProviders } from './client-providers';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' });
@@ -16,9 +15,9 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans bg-[#0B132B] text-white antialiased`} suppressHydrationWarning>
-        <Providers>
+        <ClientProviders>
           {children}
-        </Providers>
+        </ClientProviders>
       </body>
     </html>
   );

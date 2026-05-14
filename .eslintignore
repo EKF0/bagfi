@@ -1,0 +1,14 @@
+# Ignore test files with Solidity syntax
+test/BagFiZapper.test.js
+test/SmartBagVault.test.cjs
+
+# Ignore build artifacts
+.next/
+dist/
+node_modules/
+artifacts/
+cache/
+
+# Ignore generated files
+*.generated.ts
+*.generated.js

@@ -1,3 +1,4 @@
+/* eslint-disable */
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
@@ -82,6 +83,7 @@ describe("BagFiZapper", function () {
   });
 });
 
+/* eslint-disable */
 // Mock ERC20 contract for testing
 contract MockERC20 {
     string public name;
