@@ -36,6 +36,8 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **WS5-02** | ✅ completed | Pause/guardrails and strategy validation checks added |
 | **WS6-01** | ✅ completed | CI workflow created and passing |
 | **WS6-02** | ✅ completed | Error tracking and telemetry integrated into swap flow and quote requests |
+| **SOL0-01** | ✅ completed | Smart Bag guardrails defined for Bags.fm integration |
+| **SOL0-02** | 🔧 pending | Depends on SOL0-01 |
 
 ---
 
@@ -45,6 +47,14 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL0-01 completed
+- Created `docs/guardrails.md` with comprehensive Smart Bag guardrails for Bags.fm integration
+- Defined core principles: curated portfolios only, no false APY, user wallet control
+- Explicitly marked token launch tooling as non-MVP and separate from Smart Bags
+- Established Bags.fm integration boundaries (discovery/trading vs portfolio/execution)
+- Created implementation checklists for architecture, UX, data, and safety
+- Documented what BagFi does NOT do (launch tokens, custody funds, autonomous trading)
 
 ### 2026-05-14 — Bags.fm + Solana transition research and plan
 - Created `docs/reports/bags-solana-transition-research.md` with current Bags API, Solana wallet, transaction-safety, and product-guardrail research
