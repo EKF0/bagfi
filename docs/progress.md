@@ -43,6 +43,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL1-03** | ✅ completed | Solana Wallet Adapter replacing RainbowKit/Wagmi |
 | **SOL1-04** | ✅ completed | Solana wallet identity normalized across app and database |
 | **SOL2-01** | ✅ completed | Bags quote API route for Solana token swaps |
+| **SOL2-02** | ✅ completed | Bags swap transaction creation route |
 
 ---
 
@@ -52,6 +53,14 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL2-02 completed
+- Created `app/api/bags/swap/route.ts` for swap transaction creation
+- POST endpoint accepts quoteResponse, userPublicKey, wrapAndUnwrapSol, prioritizationFeeLamports
+- Validates all parameters including base58 addresses
+- Calls `createSwapTransaction` from `lib/bags/client.ts`
+- Returns serialized transaction with CU, priority fee, block-height expiry
+- Normalized error handling and telemetry tracking
 
 ### 2026-05-14 — SOL2-01 completed
 - Created `app/api/bags/quote/route.ts` with comprehensive input validation
