@@ -40,6 +40,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL0-02** | ✅ completed | EVM assumptions audited, 52 items mapped to Solana equivalents |
 | **SOL1-01** | ✅ completed | Solana and Bags environment validation added |
 | **SOL1-02** | ✅ completed | Typed Bags API client with retries and rate limiting |
+| **SOL1-03** | ✅ completed | Solana Wallet Adapter replacing RainbowKit/Wagmi |
 
 ---
 
@@ -49,6 +50,16 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
 - Created `docs/reports/agent-skill-stack-research.md` to document the researched skill stack and why duplicate/low-trust marketplace skills were skipped
 - Updated `.AGENTS.md` so future agents default to the `SOL0`-`SOL7` Bags/Solana roadmap and load the right skills before research/implementation
+
+### 2026-05-14 — SOL1-03 completed
+- Installed Solana wallet adapter packages: @solana/web3.js, @solana/wallet-adapter-react, @solana/spl-token
+- Replaced EVM wallet stack with Solana Wallet Standard:
+  - app/providers.tsx: ConnectionProvider + WalletProvider (Phantom, Solflare)
+  - app/layout.tsx: Solana wallet adapter CSS import
+  - components/header.tsx: WalletMultiButton replacing RainbowKit ConnectButton
+  - Deleted app/wagmi-config.ts
+- Supports auto-connect and cluster configuration via env vars
+- Wallet connect/disconnect working with Solana adapters
 
 ### 2026-05-14 — SOL1-02 completed
 - Created `lib/bags/client.ts` with comprehensive typed Bags API client
