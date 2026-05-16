@@ -4,10 +4,33 @@ import { useState } from 'react';
 import { DepositModal } from './deposit-modal';
 import { ArrowRight, RotateCw } from 'lucide-react';
 import { allocationLabel, type SmartBagTemplate } from '@/lib/smart-bags/session-engine';
+import { useWalletBalances } from '@/hooks/use-wallet-balances';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 export function BagCard(bag: SmartBagTemplate) {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const { connected } = useWallet();
+  const { balances } = useWalletBalances();
   const { title, description, metricLabel, metricValue, risk, assets, strategy, maxSlippageBps } = bag;
+
+  // Compute user position for this bag's target mints
+  const position = connected && balances.length > 0 ? (() => {
+    const held = assets
+      .map((asset) => {
+        const match = balances.find((b) => b.mint === asset.mint);
+        return {
+          symbol: asset.symbol,
+          targetBps: asset.allocationBps,
+          valueUsd: match?.valueUsd ?? 0,
+        };
+      })
+      .filter((item) => item.valueUsd > 0);
+
+    const totalValue = held.reduce((sum, h) => sum + h.valueUsd, 0);
+    if (totalValue < 0.01) return null;
+
+    return { held, totalValue };
+  })() : null;
 
   return (
     <>
@@ -46,6 +69,36 @@ export function BagCard(bag: SmartBagTemplate) {
              ))}
           </div>
         </div>
+
+        {/* User position section */}
+        {position && (
+          <div className="bg-accentPrimary/5 border border-accentPrimary/15 rounded-xl p-4 mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-xs text-accentPrimary/80 uppercase tracking-wider font-bold">Your Position</span>
+              <span className="text-sm font-bold text-accentPrimary">
+                ${position.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {position.held.map((item) => {
+                const actualPct = position.totalValue > 0 ? (item.valueUsd / position.totalValue) * 100 : 0;
+                const targetPct = item.targetBps / 100;
+                const drift = actualPct - targetPct;
+                return (
+                  <div key={item.symbol} className="flex items-center justify-between text-xs">
+                    <span className="text-white/70">{item.symbol}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/50">{actualPct.toFixed(1)}%</span>
+                      <span className={`font-mono ${Math.abs(drift) > bag.rebalanceThresholdBps / 100 ? 'text-amber-400' : 'text-white/30'}`}>
+                        {drift >= 0 ? '+' : ''}{drift.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-auto">
           <div>

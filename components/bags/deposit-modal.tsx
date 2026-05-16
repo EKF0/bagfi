@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle, ClipboardList, Loader2, Send, Shield, Walle
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
 import { DEPOSIT_TOKENS } from '@/lib/smart-bags/catalog';
+import { useBalanceStore } from '@/lib/stores/balance-store';
 import {
   allocationLabel,
   attachQuoteSnapshots,
@@ -87,6 +88,7 @@ function receiptId(snapshotId: string) {
 
 export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
   const { connected, publicKey, signTransaction } = useWallet();
+  const triggerRefresh = useBalanceStore((state) => state.triggerRefresh);
   const walletAddress = publicKey?.toBase58();
   const [amount, setAmount] = useState('');
   const [inputTokenSymbol, setInputTokenSymbol] = useState(DEPOSIT_TOKENS[0].symbol);
@@ -281,6 +283,9 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
           throw error;
         }
       }
+
+      // Trigger balance refresh across all dashboard components
+      triggerRefresh();
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : 'Failed to execute deposit session.');
     } finally {
