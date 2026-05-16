@@ -2,21 +2,12 @@
 
 import { useState } from 'react';
 import { DepositModal } from './deposit-modal';
-import { ArrowRight, TrendingUp } from 'lucide-react';
-import Image from 'next/image';
+import { ArrowRight, RotateCw } from 'lucide-react';
+import { allocationLabel, type SmartBagTemplate } from '@/lib/smart-bags/session-engine';
 
-interface BagCardProps {
-  id: string;
-  title: string;
-  description: string;
-  apy: string;
-  tvl: string;
-  risk: 'Low' | 'Medium' | 'High';
-  assets: { symbol: string; icon: string; allocation: string }[];
-}
-
-export function BagCard({ id, title, description, apy, tvl, risk, assets }: BagCardProps) {
+export function BagCard(bag: SmartBagTemplate) {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const { title, description, metricLabel, metricValue, risk, assets, strategy, maxSlippageBps } = bag;
 
   return (
     <>
@@ -29,11 +20,11 @@ export function BagCard({ id, title, description, apy, tvl, risk, assets }: BagC
             </span>
           </div>
           <div className="text-right">
-            <div className="flex items-center gap-1 text-green-400 font-bold">
-               <TrendingUp className="w-4 h-4" />
-               <span>{apy}</span>
+            <div className="flex items-center gap-1 text-accentPrimary font-bold">
+               <RotateCw className="w-4 h-4" />
+               <span>{metricValue}</span>
             </div>
-            <div className="text-xs text-white/50 mt-1">APY</div>
+            <div className="text-xs text-white/50 mt-1">{metricLabel}</div>
           </div>
         </div>
 
@@ -50,7 +41,7 @@ export function BagCard({ id, title, description, apy, tvl, risk, assets }: BagC
                      </div>
                      <span className="font-medium text-white/80">{asset.symbol}</span>
                    </div>
-                   <span className="text-white/60">{asset.allocation}</span>
+                   <span className="text-white/60">{allocationLabel(asset.allocationBps)}</span>
                 </div>
              ))}
           </div>
@@ -58,8 +49,8 @@ export function BagCard({ id, title, description, apy, tvl, risk, assets }: BagC
 
         <div className="flex items-center justify-between mt-auto">
           <div>
-            <div className="text-xs text-white/50">TVL</div>
-            <div className="font-mono text-sm font-medium">{tvl}</div>
+            <div className="text-xs text-white/50">{strategy}</div>
+            <div className="font-mono text-sm font-medium">{(maxSlippageBps / 100).toFixed(2)}% max slippage</div>
           </div>
           <button 
             onClick={() => setIsDepositOpen(true)}
@@ -74,7 +65,7 @@ export function BagCard({ id, title, description, apy, tvl, risk, assets }: BagC
         <DepositModal 
            isOpen={isDepositOpen} 
            onClose={() => setIsDepositOpen(false)} 
-           bag={{ id, title, apy, assets }} 
+           bag={bag} 
         />
       )}
     </>
