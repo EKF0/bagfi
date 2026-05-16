@@ -1,15 +1,12 @@
 'use client';
 
+import { useWalletBalances } from '@/hooks/use-wallet-balances';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { TrendingUp, Wallet } from 'lucide-react';
+import { Loader2, TrendingUp, Wallet } from 'lucide-react';
 
 export function NetWorth() {
-  const { connected, publicKey } = useWallet();
-  
-  const isLoading = false;
-  const totalValue = 12450.75;
-  const dayChange = 450.20;
-  const dayChangePct = +3.4;
+  const { connected } = useWallet();
+  const { totalValueUsd, isLoading, fetchedAt } = useWalletBalances();
 
   if (!connected) {
     return (
@@ -35,16 +32,26 @@ export function NetWorth() {
           <div>
             <p className="text-sm font-medium text-white/60 mb-1">Total Net Worth</p>
             <div className="flex items-end gap-3">
-              <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight">
-                ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </h1>
-              <div className="flex items-center gap-1 bg-green-500/10 text-green-400 px-2.5 py-1 rounded-full text-sm font-medium mb-1.5">
-                <TrendingUp className="h-4 w-4" />
-                <span>{dayChangePct}%</span>
-              </div>
+              {isLoading && totalValueUsd === 0 ? (
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-accentPrimary" />
+                  <span className="text-white/40 text-lg">Loading balances…</span>
+                </div>
+              ) : (
+                <>
+                  <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight">
+                    ${totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </h1>
+                  <div className="flex items-center gap-1 bg-white/5 text-white/40 px-2.5 py-1 rounded-full text-sm font-medium mb-1.5">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>--</span>
+                  </div>
+                </>
+              )}
             </div>
-            <p className="text-sm text-green-400/80 mt-1">
-              +${dayChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
+            {/* Day change requires historical snapshots — available after SOL6 */}
+            <p className="text-sm text-white/30 mt-1">
+              Daily change available after history tracking is enabled
             </p>
           </div>
         </div>
@@ -53,7 +60,17 @@ export function NetWorth() {
           <div className="flex -space-x-2">
             <ChainBadge bg="bg-gradient-to-br from-purple-500 to-blue-500" title="Solana" />
           </div>
-          <span className="text-sm text-white/60">On Solana</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/60">On Solana</span>
+            {isLoading && (
+              <Loader2 className="h-3 w-3 animate-spin text-white/30" />
+            )}
+            {fetchedAt && !isLoading && (
+              <span className="text-xs text-white/25">
+                Updated {new Date(fetchedAt).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -46,10 +46,24 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL2-02** | ✅ completed | Bags swap transaction creation route |
 | **SOL2-03** | ✅ completed | Solana transaction review and simulation UX |
 | **SOL2-04** | ✅ completed | Smart Bag deposit and rebalance session engine |
+| **SOL2-05** | ✅ completed | Portfolio reconciliation with real on-chain balances |
 
 ---
 
 ## Log
+
+### 2026-05-16 — SOL2-05 completed
+- Created `lib/solana/balances.ts` — fetches native SOL + SPL token balances via Solana RPC (`getBalance` + `getParsedTokenAccountsByOwner`), enriches with catalog metadata, filters dust
+- Created `lib/stores/balance-store.ts` — Zustand store with `refreshCounter` for cross-component post-transaction refresh
+- Created `hooks/use-wallet-balances.ts` — React hook with auto-fetch on wallet connect/disconnect and Zustand counter subscription
+- Replaced all mock data in dashboard:
+  - `holdings-table.tsx` — real token list with loading skeleton and empty state
+  - `net-worth.tsx` — real `totalValueUsd` from on-chain balances (day change deferred to SOL6 snapshots)
+  - `asset-allocation.tsx` — dynamic doughnut chart built from actual holdings
+- Updated `deposit-modal.tsx` — calls `triggerRefresh()` after confirmed deposit session
+- Updated `bag-card.tsx` — shows "Your Position" with actual vs. target allocation per asset and drift indicators
+- USD pricing uses temporary hardcoded price map (SOL, USDC, USDT, JUP, BONK, JitoSOL) — real price feed deferred to SOL3-01
+- Validation: `npm run lint` (0 errors), `npm run build` (all 11 pages), no mock data remaining
 
 ### 2026-05-16 — SOL2-04 completed and Vercel deploy install fix applied
 - Created typed Smart Bag session engine with base-unit deposit splitting, allocation validation, quote snapshots, and receipt storage
