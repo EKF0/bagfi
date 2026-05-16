@@ -18,7 +18,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 
 ---
 
-## Current Status (Updated: 2026-05-14)
+## Current Status (Updated: 2026-05-16)
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -45,10 +45,18 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL2-01** | ✅ completed | Bags quote API route for Solana token swaps |
 | **SOL2-02** | ✅ completed | Bags swap transaction creation route |
 | **SOL2-03** | ✅ completed | Solana transaction review and simulation UX |
+| **SOL2-04** | ✅ completed | Smart Bag deposit and rebalance session engine |
 
 ---
 
 ## Log
+
+### 2026-05-16 — SOL2-04 completed and Vercel deploy install fix applied
+- Created typed Smart Bag session engine with base-unit deposit splitting, allocation validation, quote snapshots, and receipt storage
+- Created Solana-native Smart Bag catalog metadata and removed stale EVM/ERC-4626 APY assumptions from `/bags`
+- Reworked deposit modal into a session flow that prepares Bags quote/swap legs, enforces slippage caps, simulates swaps before wallet signature, and stores signed receipts locally
+- Fixed Vercel install/build failures by removing macOS-only `@next/swc-darwin-arm64` from normal dependencies and removing the redundant build-time `npm install` from `vercel.json`
+- Validation: `npm install --legacy-peer-deps --no-audit --no-fund`, `npm run lint`, `npm run build`, and Vercel preview `dpl_EPhoYn9DEcuEiRYeUmqG7ywrAx9m` reached `READY`
 
 ### 2026-05-14 — Agent skill stack installed and roadmap enforcement updated
 - Installed official curated Codex skills for Playwright/browser QA, security review/threat modeling, Sentry observability, Vercel deployment, screenshots, and GitHub PR/CI workflows
