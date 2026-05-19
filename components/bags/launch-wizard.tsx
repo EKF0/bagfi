@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { Connection, VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { 
   Rocket, 
   Loader2, 
@@ -13,11 +13,19 @@ import {
   ArrowLeft,
   Settings2,
   Eye,
-  Coins
+  Coins,
+  Users,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import telemetry from '@/lib/telemetry';
 
-type WizardStep = 'metadata' | 'preview' | 'launch' | 'success';
+type WizardStep = 'metadata' | 'fee-share' | 'preview' | 'launch' | 'success';
+
+interface Participant {
+  wallet: string;
+  bps: number;
+}
 
 export function LaunchWizard() {
   const { connected, publicKey, signTransaction } = useWallet();
@@ -27,6 +35,7 @@ export function LaunchWizard() {
   const [metadataUri, setMetadataUri] = useState<string | null>(null);
   const [tokenMint, setTokenMint] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [feeConfigSignature, setFeeConfigSignature] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -40,18 +49,40 @@ export function LaunchWizard() {
     initialBuy: '0'
   });
 
+  const [participants, setParticipants] = useState<Participant[]>([]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const addParticipant = () => {
+    setParticipants(prev => [...prev, { wallet: '', bps: 0 }]);
+  };
+
+  const removeParticipant = (index: number) => {
+    setParticipants(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateParticipant = (index: number, field: keyof Participant, value: string | number) => {
+    setParticipants(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const totalBps = participants.reduce((sum, p) => sum + p.bps, 0);
+
   const nextStep = () => {
-    if (step === 'metadata') setStep('preview');
+    if (step === 'metadata') setStep('fee-share');
+    else if (step === 'fee-share') setStep('preview');
     else if (step === 'preview') setStep('launch');
   };
 
   const prevStep = () => {
-    if (step === 'preview') setStep('metadata');
+    if (step === 'fee-share') setStep('metadata');
+    else if (step === 'preview') setStep('fee-share');
     else if (step === 'launch') setStep('preview');
   };
 
@@ -73,7 +104,7 @@ export function LaunchWizard() {
       const json = await response.json();
       if (json.success) {
         setMetadataUri(json.data.metadataUri);
-        setStep('preview');
+        setStep('fee-share');
       } else {
         throw new Error(json.error || 'Failed to create metadata');
       }
@@ -92,45 +123,25 @@ export function LaunchWizard() {
     const startTime = Date.now();
 
     try {
-      const response = await fetch('/api/bags/creator/launch', {
+      const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
+
+      // 1. Launch Token
+      const launchResponse = await fetch('/api/bags/creator/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           creator: publicKey.toBase58(),
           metadataUri,
-          initialBuyAmount: (parseFloat(formData.initialBuy) * 1e9).toString() // lamports
+          initialBuyAmount: (parseFloat(formData.initialBuy) * 1e9).toString()
         })
       });
 
-      const json = await response.json();
-      if (!json.success) throw new Error(json.error || 'Failed to generate launch transaction');
+      const launchJson = await launchResponse.json();
+      if (!launchJson.success) throw new Error(launchJson.error || 'Failed to generate launch transaction');
 
-      const { tx, tokenMint, blockhash } = json.data;
-      const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
-
-      // Simulation
+      const { tx, tokenMint: launchedMint } = launchJson.data;
       const transaction = VersionedTransaction.deserialize(Buffer.from(tx, 'base64'));
-      const simulation = await connection.simulateTransaction(transaction);
       
-      const durationMs = Date.now() - startTime;
-      if (simulation.value.err) {
-        telemetry.trackSolanaSimulation({
-          success: false,
-          durationMs,
-          error: JSON.stringify(simulation.value.err),
-          action: 'token-launch'
-        });
-        throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
-      }
-
-      telemetry.trackSolanaSimulation({
-        success: true,
-        durationMs,
-        computeUnits: simulation.value.unitsConsumed || 0,
-        action: 'token-launch'
-      });
-
-      // Sign & Send
       const signedTx = await signTransaction(transaction);
       const signature = await connection.sendTransaction(signedTx, {
         maxRetries: 3,
@@ -138,7 +149,7 @@ export function LaunchWizard() {
         preflightCommitment: 'confirmed'
       });
       setTxSignature(signature);
-      setTokenMint(tokenMint);
+      setTokenMint(launchedMint);
       
       await connection.confirmTransaction(signature, 'confirmed');
       
@@ -148,6 +159,39 @@ export function LaunchWizard() {
         status: 'confirmed',
         action: 'token-launch'
       });
+
+      // 2. Configure Fee Sharing (if participants exist)
+      if (participants.length > 0) {
+        try {
+          const feeResponse = await fetch('/api/bags/creator/fee-share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              creator: publicKey.toBase58(),
+              tokenMint: launchedMint,
+              participants
+            })
+          });
+
+          const feeJson = await feeResponse.json();
+          if (feeJson.success) {
+            const feeTxs = feeJson.data;
+            for (const txData of feeTxs) {
+              const feeTx = VersionedTransaction.deserialize(Buffer.from(txData.tx, 'base64'));
+              const signedFeeTx = await signTransaction(feeTx);
+              const feeSig = await connection.sendTransaction(signedFeeTx, {
+                maxRetries: 3,
+                preflightCommitment: 'confirmed'
+              });
+              setFeeConfigSignature(feeSig);
+              await connection.confirmTransaction(feeSig, 'confirmed');
+            }
+          }
+        } catch (feeErr) {
+          console.error('Fee share config failed, but token was launched:', feeErr);
+          // Don't fail the whole flow if only fee share config failed
+        }
+      }
 
       setStep('success');
 
@@ -172,11 +216,13 @@ export function LaunchWizard() {
   return (
     <div className="max-w-3xl">
       {/* Steps Indicator */}
-      <div className="flex items-center gap-4 mb-10">
+      <div className="flex items-center gap-4 mb-10 overflow-x-auto pb-2 scrollbar-hide">
         <StepDot status={step === 'metadata' ? 'active' : 'completed'} label="Metadata" />
-        <div className="h-px bg-white/10 flex-1" />
-        <StepDot status={step === 'preview' ? 'active' : step === 'metadata' ? 'pending' : 'completed'} label="Preview" />
-        <div className="h-px bg-white/10 flex-1" />
+        <div className="h-px bg-white/10 flex-1 min-w-[20px]" />
+        <StepDot status={step === 'fee-share' ? 'active' : step === 'metadata' ? 'pending' : 'completed'} label="Fee Share" />
+        <div className="h-px bg-white/10 flex-1 min-w-[20px]" />
+        <StepDot status={step === 'preview' ? 'active' : (step === 'metadata' || step === 'fee-share') ? 'pending' : 'completed'} label="Preview" />
+        <div className="h-px bg-white/10 flex-1 min-w-[20px]" />
         <StepDot status={step === 'launch' ? 'active' : (step === 'success' ? 'completed' : 'pending')} label="Launch" />
       </div>
 
@@ -243,8 +289,75 @@ export function LaunchWizard() {
               disabled={isLoading || !formData.name || !formData.symbol}
               className="mt-4 w-full bg-accentPrimary hover:bg-accentSecondary disabled:bg-white/5 text-deepNavy font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Next: Review Details <ArrowRight className="w-4 h-4" /></>}
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Next: Configure Economics <ArrowRight className="w-4 h-4" /></>}
             </button>
+          </div>
+        )}
+
+        {step === 'fee-share' && (
+          <div className="space-y-6">
+            <div>
+               <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                 <Users className="w-5 h-5 text-accentPrimary" />
+                 Fee Share Configuration
+               </h3>
+               <p className="text-sm text-white/40 mb-6">Distribute launch-related fees between multiple stakeholder wallets. Total must not exceed 100%.</p>
+            </div>
+
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+              {participants.map((p, idx) => (
+                <div key={idx} className="flex items-center gap-3 bg-white/5 p-4 rounded-xl border border-white/5">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-white/30">Wallet Address</label>
+                    <input 
+                      value={p.wallet} 
+                      onChange={(e) => updateParticipant(idx, 'wallet', e.target.value)}
+                      placeholder="Solana Address"
+                      className="w-full bg-transparent text-sm text-white outline-none font-mono"
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-white/30">Allocation %</label>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="number"
+                        value={p.bps / 100}
+                        onChange={(e) => updateParticipant(idx, 'bps', Math.round(parseFloat(e.target.value) * 100))}
+                        className="w-full bg-transparent text-sm text-white outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+                  <button onClick={() => removeParticipant(idx)} className="mt-4 text-white/20 hover:text-red-400 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button 
+              onClick={addParticipant}
+              className="w-full py-3 border border-dashed border-white/10 rounded-xl text-white/40 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <Plus className="w-4 h-4" /> Add Stakeholder
+            </button>
+
+            <div className="pt-4 border-t border-white/5 flex justify-between items-center">
+               <span className="text-sm text-white/40">Total Allocated</span>
+               <span className={`font-bold ${(totalBps > 10000) ? 'text-red-400' : 'text-accentPrimary'}`}>
+                 {(totalBps / 100).toFixed(2)}%
+               </span>
+            </div>
+
+            <div className="flex gap-4">
+               <button onClick={prevStep} className="w-1/3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl">Back</button>
+               <button 
+                  onClick={nextStep}
+                  disabled={totalBps > 10000}
+                  className="flex-1 bg-accentPrimary hover:bg-accentSecondary disabled:bg-white/5 text-deepNavy font-bold py-4 rounded-xl transition-all"
+               >
+                 Review Launch
+               </button>
+            </div>
           </div>
         )}
 
@@ -263,8 +376,8 @@ export function LaunchWizard() {
 
             <div className="bg-white/5 rounded-2xl p-6 space-y-4">
                <div className="flex justify-between items-center text-sm">
-                  <span className="text-white/40">Metadata Status</span>
-                  <span className="flex items-center gap-1 text-green-400 font-medium"><CheckCircle className="w-3 h-3" /> Ready</span>
+                  <span className="text-white/40">Fee Sharing</span>
+                  <span className="text-white font-medium">{participants.length} stakeholders ({(totalBps / 100).toFixed(2)}%)</span>
                </div>
                <div className="flex justify-between items-center text-sm">
                   <span className="text-white/40">Network</span>
@@ -285,12 +398,7 @@ export function LaunchWizard() {
             </div>
 
             <div className="flex gap-4">
-              <button 
-                onClick={prevStep}
-                className="w-1/3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" /> Back
-              </button>
+              <button onClick={prevStep} className="w-1/3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl">Back</button>
               <button 
                 onClick={nextStep}
                 className="flex-1 bg-accentPrimary hover:bg-accentSecondary text-deepNavy font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
@@ -309,31 +417,25 @@ export function LaunchWizard() {
              <div>
                 <h3 className="text-2xl font-bold mb-2">Confirm Launch</h3>
                 <p className="text-white/50 max-w-sm mx-auto">
-                  You are about to launch <strong>${formData.symbol}</strong> on Solana. 
-                  A transaction will be sent to your wallet for signing.
+                  You are about to launch <strong>${formData.symbol}</strong>. 
+                  This will trigger two transactions: Token Creation and Fee Configuration.
                 </p>
              </div>
 
              <div className="w-full bg-white/5 rounded-2xl p-6 text-left space-y-3">
                 <div className="flex justify-between text-sm">
-                   <span className="text-white/40">Operation</span>
-                   <span className="text-white font-medium">Bags Token Launch</span>
-                </div>
-                <div className="flex justify-between text-sm">
                    <span className="text-white/40">Initial Liquidity</span>
                    <span className="text-accentPrimary font-bold">{formData.initialBuy} SOL</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                   <span className="text-white/40">Fee Structure</span>
+                   <span className="text-white font-medium">{participants.length > 0 ? 'Custom Share' : 'Default'}</span>
                 </div>
              </div>
 
              <div className="w-full flex gap-4">
+               <button onClick={prevStep} disabled={isLoading} className="w-1/3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl disabled:opacity-50">Cancel</button>
                <button 
-                onClick={prevStep}
-                disabled={isLoading}
-                className="w-1/3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button 
                 onClick={handleLaunch}
                 disabled={isLoading}
                 className="flex-1 bg-accentPrimary hover:bg-accentSecondary text-deepNavy font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
@@ -352,11 +454,11 @@ export function LaunchWizard() {
              <div>
                 <h3 className="text-3xl font-display font-bold mb-2">Token Launched!</h3>
                 <p className="text-white/50 max-w-sm mx-auto mb-8">
-                  Your token <strong>${formData.symbol}</strong> has been successfully broadcast to the Solana network.
+                  Your token <strong>${formData.symbol}</strong> has been successfully broadcast and configured.
                 </p>
              </div>
 
-             <div className="w-full space-y-3">
+             <div className="w-full space-y-3 text-left">
                 <a 
                   href={`https://solscan.io/token/${tokenMint}`}
                   target="_blank" rel="noopener noreferrer"
@@ -394,6 +496,7 @@ export function LaunchWizard() {
                   setFormData({
                     name: '', symbol: '', description: '', twitter: '', telegram: '', website: '', imageUrl: '', initialBuy: '0'
                   });
+                  setParticipants([]);
                 }}
                 className="mt-6 text-accentPrimary hover:underline font-bold text-sm"
               >

@@ -818,6 +818,44 @@ export async function createTokenLaunchTransaction(params: TokenLaunchRequest): 
 }
 
 /**
+ * Fee Share Configuration
+ */
+export interface FeeShareParticipant {
+  wallet: string;
+  bps: number; // 0-10000
+}
+
+export interface FeeShareConfigRequest {
+  creator: string;
+  tokenMint: string;
+  participants: FeeShareParticipant[];
+}
+
+export interface FeeShareConfigResponse {
+  tx: string; // base64 serialized transaction
+  blockhash: {
+    blockhash: string;
+    lastValidBlockHeight: number;
+  };
+}
+
+export async function createFeeShareConfigTransaction(params: FeeShareConfigRequest): Promise<BagsApiResponse<FeeShareConfigResponse[]>> {
+  const response = await bagsRequest<ClaimTransactionsResponse>('/fee-share/config/transaction', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+
+  if (!response.data.success) {
+    throw new BagsApiError('Failed to generate fee share config transaction', 500, 'FEE_SHARE_CONFIG_FAILED');
+  }
+
+  return {
+    ...response,
+    data: response.data.response as unknown as FeeShareConfigResponse[]
+  };
+}
+
+/**
  * Health Check
  * GET /ping
  */
