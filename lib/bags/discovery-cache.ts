@@ -1008,3 +1008,56 @@ export async function refreshBagsTokenAnalytics(
     rateLimit
   };
 }
+
+export interface RefreshAllBagsDataResult {
+  discovery: RefreshBagsDiscoveryCacheResult;
+  scoring: RefreshBagsTokenScoresResult | null;
+  analytics: RefreshBagsTokenAnalyticsResult | null;
+  totalExternalRequestsUsed: number;
+}
+
+/**
+ * Coordinate a full refresh of all Bags discovery data.
+ * Sequential execution ensures rate limits are respected and scoring/analytics 
+ * always have the latest discovery data to work with.
+ */
+export async function refreshAllBagsData(options: { 
+  force?: boolean;
+  scoreLimit?: number;
+  analyticsLimit?: number;
+} = {}): Promise<RefreshAllBagsDataResult> {
+  let totalExternalRequestsUsed = 0;
+
+  // 1. Discovery (Feed & Pools) - Core dependency
+  const discovery = await refreshBagsDiscoveryCache({ 
+    force: options.force 
+  });
+  if (discovery.refreshed) {
+    totalExternalRequestsUsed += BAGS_REQUESTS_PER_DISCOVERY_REFRESH;
+  }
+
+  // 2. Risk Scoring - Depends on Discovery
+  const scoring = await refreshBagsTokenScores({
+    force: options.force,
+    limit: options.scoreLimit
+  });
+  if (scoring.refreshed) {
+    totalExternalRequestsUsed += scoring.externalRequestsUsed;
+  }
+
+  // 3. Analytics - Depends on Discovery (Eligible tokens)
+  const analytics = await refreshBagsTokenAnalytics({
+    force: options.force,
+    limit: options.analyticsLimit
+  });
+  if (analytics.refreshed) {
+    totalExternalRequestsUsed += analytics.externalRequestsUsed;
+  }
+
+  return {
+    discovery,
+    scoring,
+    analytics,
+    totalExternalRequestsUsed
+  };
+}

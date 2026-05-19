@@ -53,10 +53,19 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
 | **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
+| **SOL6-02** | ✅ completed | Cache and background refresh policy for Bags data |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL6-02 completed
+- Implemented centralized cache and background refresh policy for Bags data:
+  - Developed `refreshAllBagsData` coordinator in `lib/bags/discovery-cache.ts`.
+  - Defined explicit expiration policies: Discovery (5m), Scoring (15m), Analytics (30m).
+  - Created `/api/bags/refresh` API route for secure, unified background orchestration.
+  - Integrated refresh telemetry to monitor cycle times and API utilization.
+- Validation: Refresh coordinator logic audit, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL6-01 completed
 - Formalized Supabase schema for Solana Smart Bags and Bags caches:
