@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { DepositModal } from './deposit-modal';
-import { ArrowRight, RotateCw } from 'lucide-react';
+import { ArrowRight, RotateCw, AlertTriangle } from 'lucide-react';
 import { allocationLabel, type SmartBagTemplate } from '@/lib/smart-bags/session-engine';
 import { useWalletBalances } from '@/hooks/use-wallet-balances';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -38,9 +38,16 @@ export function BagCard(bag: SmartBagTemplate) {
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="font-display text-xl font-bold text-white mb-1">{title}</h3>
-            <span className="text-xs font-medium px-2 py-1 rounded-md bg-white/10 text-white/70">
-              {risk} Risk
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                risk === 'Low' ? 'bg-green-500/10 text-green-400' :
+                risk === 'Medium' ? 'bg-blue-500/10 text-blue-400' :
+                'bg-red-500/10 text-red-400'
+              }`}>
+                {risk === 'High' && <AlertTriangle className="w-3 h-3" />}
+                {risk} Risk
+              </span>
+            </div>
           </div>
           <div className="text-right">
             <div className="flex items-center gap-1 text-accentPrimary font-bold">
