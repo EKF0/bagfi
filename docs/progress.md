@@ -50,10 +50,21 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL3-01** | ✅ completed | Bags launch feed and pool state cached in Supabase |
 | **SOL3-02** | ✅ completed | Bags token risk scoring with eligible-only discovery filter |
 | **SOL3-03** | ✅ completed | Solana Smart Bag catalog and allocation templates |
+| **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL4-01 completed
+- Integrated Bags token creator and lifetime fee analytics:
+  - Added `getTokenLifetimeFees`, `getTokenClaimStats`, and `getTokenClaimEvents` to Bags API client.
+  - Extended Supabase schema with `bags_token_analytics` and `bags_token_claim_events` tables.
+  - Implemented background ingestion in `lib/bags/discovery-cache.ts` for eligible tokens.
+  - Updated `/api/bags/discovery` to support analytics retrieval and refresh.
+  - Created `components/pro/bags-analytics.tsx` for visualizing token economic health and stakeholder distribution.
+  - Integrated analytics into the Pro Dashboard with token selector and real-time cache fetching.
+- Validation: `npm run lint` (0 errors), `npm run build` (all 11 pages pass).
 
 ### 2026-05-19 — SOL3-03 completed
 - Designed and implemented three thematic Solana Smart Bag templates:

@@ -521,8 +521,9 @@ export async function getBagsPools(params: BagsPoolsRequest = {}): Promise<BagsA
 }
 
 /**
- * Token Launch Creators
+ * Token Launch Creators / Claim Stats
  * GET /token-launch/creator/v3
+ * GET /token-launch/claim-stats
  */
 export interface TokenLaunchCreator {
   username?: string | null;
@@ -535,6 +536,7 @@ export interface TokenLaunchCreator {
   twitterUsername?: string | null;
   bagsUsername?: string | null;
   isAdmin?: boolean;
+  totalClaimed?: string; // Total amount claimed in lamports (from claim-stats)
 }
 
 export interface TokenLaunchCreatorsResponse {
@@ -554,6 +556,92 @@ export async function getTokenLaunchCreators(tokenMint: string): Promise<BagsApi
     data: {
       creators: unwrapped.data,
       total: unwrapped.data.length
+    }
+  };
+}
+
+export async function getTokenClaimStats(tokenMint: string): Promise<BagsApiResponse<TokenLaunchCreatorsResponse>> {
+  const queryParams = new URLSearchParams();
+  queryParams.set('tokenMint', tokenMint);
+
+  const response = await bagsRequest<BagsApiEnvelope<TokenLaunchCreator[]>>(`/token-launch/claim-stats?${queryParams.toString()}`);
+  const unwrapped = unwrapBagsResponse(response, 'Invalid token claim stats response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      creators: unwrapped.data,
+      total: unwrapped.data.length
+    }
+  };
+}
+
+/**
+ * Token Lifetime Fees
+ * GET /token-launch/lifetime-fees
+ */
+export interface TokenLifetimeFeesResponse {
+  lifetimeFeesLamports: string;
+}
+
+export async function getTokenLifetimeFees(tokenMint: string): Promise<BagsApiResponse<TokenLifetimeFeesResponse>> {
+  const queryParams = new URLSearchParams();
+  queryParams.set('tokenMint', tokenMint);
+
+  const response = await bagsRequest<BagsApiEnvelope<string>>(`/token-launch/lifetime-fees?${queryParams.toString()}`);
+  const unwrapped = unwrapBagsResponse(response, 'Invalid token lifetime fees response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      lifetimeFeesLamports: unwrapped.data
+    }
+  };
+}
+
+/**
+ * Token Claim Events
+ * GET /fee-share/token/claim-events
+ */
+export interface TokenClaimEvent {
+  wallet: string;
+  isCreator: boolean;
+  amount: string;
+  signature: string;
+  timestamp: string; // ISO 8601
+}
+
+export interface TokenClaimEventsResponse {
+  events: TokenClaimEvent[];
+  total?: number;
+}
+
+export interface TokenClaimEventsRequest {
+  tokenMint: string;
+  mode?: 'offset' | 'time';
+  limit?: number;
+  offset?: number;
+  from?: number; // unix timestamp
+  to?: number;   // unix timestamp
+}
+
+export async function getTokenClaimEvents(params: TokenClaimEventsRequest): Promise<BagsApiResponse<TokenClaimEventsResponse>> {
+  const queryParams = new URLSearchParams();
+  queryParams.set('tokenMint', params.tokenMint);
+  if (params.mode) queryParams.set('mode', params.mode);
+  if (params.limit) queryParams.set('limit', params.limit.toString());
+  if (params.offset) queryParams.set('offset', params.offset.toString());
+  if (params.from) queryParams.set('from', params.from.toString());
+  if (params.to) queryParams.set('to', params.to.toString());
+
+  const response = await bagsRequest<BagsApiEnvelope<{ events: TokenClaimEvent[] }>>(`/fee-share/token/claim-events?${queryParams.toString()}`);
+  const unwrapped = unwrapBagsResponse(response, 'Invalid token claim events response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      events: unwrapped.data.events,
+      total: unwrapped.data.events.length
     }
   };
 }

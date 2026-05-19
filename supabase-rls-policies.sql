@@ -149,3 +149,39 @@ FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
+
+-- 4. Bags analytics tables
+ALTER TABLE bags_token_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_token_claim_events ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON TABLE bags_token_analytics TO anon, authenticated;
+GRANT SELECT ON TABLE bags_token_claim_events TO anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_token_analytics TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_token_claim_events TO service_role;
+
+DROP POLICY IF EXISTS "Public can view Bags token analytics" ON bags_token_analytics;
+CREATE POLICY "Public can view Bags token analytics" ON bags_token_analytics
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Public can view Bags token claim events" ON bags_token_claim_events;
+CREATE POLICY "Public can view Bags token claim events" ON bags_token_claim_events
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags token analytics" ON bags_token_analytics;
+CREATE POLICY "Service role can manage Bags token analytics" ON bags_token_analytics
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags token claim events" ON bags_token_claim_events;
+CREATE POLICY "Service role can manage Bags token claim events" ON bags_token_claim_events
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);

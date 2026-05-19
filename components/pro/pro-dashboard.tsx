@@ -16,6 +16,7 @@ import {
   Filler
 } from 'chart.js';
 import { db } from '@/lib/database';
+import { BagsAnalytics } from './bags-analytics';
 
 ChartJS.register(
   CategoryScale,
@@ -32,6 +33,7 @@ export function ProDashboard() {
   const { connected, publicKey } = useWallet();
   const [isPro, setIsPro] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [eligibleMints, setEligibleMints] = useState<Array<{ mint: string; symbol: string; name: string }>>([]);
 
   const address = publicKey?.toBase58();
 
@@ -68,7 +70,24 @@ export function ProDashboard() {
       }
     };
 
+    const fetchEligibleMints = async () => {
+      try {
+        const response = await fetch('/api/bags/discovery?eligibleOnly=true');
+        const json = await response.json();
+        if (json.success && isMounted) {
+          setEligibleMints(json.data.eligibleLaunches.map((l: any) => ({
+            mint: l.token_mint,
+            symbol: l.symbol,
+            name: l.name
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching eligible mints:', err);
+      }
+    };
+
     checkProStatus();
+    fetchEligibleMints();
 
     return () => {
       isMounted = false;
@@ -252,6 +271,10 @@ export function ProDashboard() {
             <span className="text-amber-400 font-medium">Rebalance Suggested</span>
           </div>
         </div>
+      </div>
+
+      <div className="pt-8">
+        <BagsAnalytics eligibleMints={eligibleMints} />
       </div>
     </div>
   );

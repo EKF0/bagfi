@@ -122,3 +122,33 @@ CREATE INDEX IF NOT EXISTS idx_bags_token_scores_tier
 
 CREATE INDEX IF NOT EXISTS idx_bags_token_scores_scored_at
   ON bags_token_scores(scored_at DESC);
+
+-- 8. Bags token analytics (lifetime fees and claim stats)
+CREATE TABLE IF NOT EXISTS bags_token_analytics (
+  token_mint text PRIMARY KEY REFERENCES bags_token_launches(token_mint),
+  lifetime_fees_lamports text NOT NULL DEFAULT '0',
+  total_claimers integer NOT NULL DEFAULT 0,
+  claim_stats jsonb NOT NULL DEFAULT '[]'::jsonb,
+  last_refreshed_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bags_token_analytics_last_refreshed_at
+  ON bags_token_analytics(last_refreshed_at DESC);
+
+-- 9. Bags token claim events
+CREATE TABLE IF NOT EXISTS bags_token_claim_events (
+  signature text PRIMARY KEY,
+  token_mint text NOT NULL REFERENCES bags_token_launches(token_mint),
+  wallet_address text NOT NULL,
+  amount_lamports text NOT NULL,
+  is_creator boolean NOT NULL DEFAULT false,
+  event_timestamp timestamp with time zone NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bags_token_claim_events_token_mint_timestamp
+  ON bags_token_claim_events(token_mint, event_timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_bags_token_claim_events_wallet_address
+  ON bags_token_claim_events(wallet_address);

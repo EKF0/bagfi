@@ -95,6 +95,30 @@ export type BagsTokenScoreRow = {
 type BagsTokenScoreInsert = BagsTokenScoreRow;
 type BagsTokenScoreUpdate = Partial<BagsTokenScoreInsert>;
 
+export type BagsTokenAnalyticsRow = {
+  token_mint: string;
+  lifetime_fees_lamports: string;
+  total_claimers: number;
+  claim_stats: Json;
+  last_refreshed_at: string;
+  updated_at: string;
+};
+
+type BagsTokenAnalyticsInsert = BagsTokenAnalyticsRow;
+type BagsTokenAnalyticsUpdate = Partial<BagsTokenAnalyticsInsert>;
+
+export type BagsTokenClaimEventRow = {
+  signature: string;
+  token_mint: string;
+  wallet_address: string;
+  amount_lamports: string;
+  is_creator: boolean;
+  event_timestamp: string;
+  created_at: string;
+};
+
+type BagsTokenClaimEventInsert = BagsTokenClaimEventRow;
+
 type BagsDiscoveryDatabase = {
   public: {
     Tables: {
@@ -122,6 +146,32 @@ type BagsDiscoveryDatabase = {
         Update: BagsTokenScoreUpdate;
         Relationships: [];
       };
+      bags_token_analytics: {
+        Row: BagsTokenAnalyticsRow;
+        Insert: BagsTokenAnalyticsInsert;
+        Update: BagsTokenAnalyticsUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "bags_token_analytics_token_mint_fkey";
+            columns: ["token_mint"];
+            referencedRelation: "bags_token_launches";
+            referencedColumns: ["token_mint"];
+          }
+        ];
+      };
+      bags_token_claim_events: {
+        Row: BagsTokenClaimEventRow;
+        Insert: BagsTokenClaimEventInsert;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: "bags_token_claim_events_token_mint_fkey";
+            columns: ["token_mint"];
+            referencedRelation: "bags_token_launches";
+            referencedColumns: ["token_mint"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -143,8 +193,10 @@ export interface BagsDiscoveryCachePayload {
   eligibleLaunches: BagsTokenLaunchRow[];
   pools: BagsPoolRow[];
   scores: BagsTokenScoreRow[];
+  analytics: BagsTokenAnalyticsRow[];
   cacheState: BagsCacheStateRow | null;
   scoreCacheState: BagsCacheStateRow | null;
+  analyticsCacheState: BagsCacheStateRow | null;
 }
 
 export interface RefreshBagsDiscoveryCacheOptions {
@@ -179,16 +231,38 @@ export interface RefreshBagsTokenScoresResult {
   rateLimit: ReturnType<typeof getRateLimitStatus>;
 }
 
+export interface RefreshBagsTokenAnalyticsOptions {
+  force?: boolean;
+  limit?: number;
+}
+
+export interface RefreshBagsTokenAnalyticsResult {
+  refreshed: boolean;
+  skippedReason?: 'fresh';
+  refreshedCount: number;
+  eventCount: number;
+  cacheState: BagsCacheStateRow | null;
+  minRefreshIntervalMs: number;
+  estimatedMaxRequestsPerHour: number;
+  externalRequestsUsed: number;
+  rateLimit: ReturnType<typeof getRateLimitStatus>;
+}
+
 const DISCOVERY_CACHE_KEY = 'bags_discovery';
 const SCORING_CACHE_KEY = 'bags_risk_scores';
+const ANALYTICS_CACHE_KEY = 'bags_token_analytics';
 const DEFAULT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const MIN_REFRESH_INTERVAL_MS = 60 * 1000;
 const DEFAULT_SCORING_INTERVAL_MS = 15 * 60 * 1000;
 const MIN_SCORING_INTERVAL_MS = 5 * 60 * 1000;
+const DEFAULT_ANALYTICS_INTERVAL_MS = 30 * 60 * 1000;
+const MIN_ANALYTICS_INTERVAL_MS = 15 * 60 * 1000;
 const BAGS_REQUESTS_PER_DISCOVERY_REFRESH = 2;
 const BAGS_REQUESTS_PER_SCORE_CANDIDATE = 2;
+const BAGS_REQUESTS_PER_ANALYTICS_CANDIDATE = 3;
 const BAGS_API_REQUEST_LIMIT_PER_HOUR = 1000;
 const DEFAULT_SCORING_CANDIDATE_LIMIT = 20;
+const DEFAULT_ANALYTICS_CANDIDATE_LIMIT = 20;
 const USDC_PRICE_IMPACT_PROBE_AMOUNT = '10000000';
 
 let cachedSupabaseClient: SupabaseClient<BagsDiscoveryDatabase> | null = null;
@@ -228,8 +302,33 @@ function getScoringCandidateLimit(limit?: number): number {
   return Math.max(1, Math.min(Math.floor(rawLimit), DEFAULT_SCORING_CANDIDATE_LIMIT));
 }
 
+function getAnalyticsRefreshIntervalMs(): number {
+  const configured = Number(process.env.BAGS_ANALYTICS_REFRESH_INTERVAL_MS);
+
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.max(configured, MIN_ANALYTICS_INTERVAL_MS);
+  }
+
+  return DEFAULT_ANALYTICS_INTERVAL_MS;
+}
+
+function getAnalyticsCandidateLimit(limit?: number): number {
+  const configured = Number(process.env.BAGS_ANALYTICS_CANDIDATE_LIMIT);
+  const rawLimit = limit ?? (
+    Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_ANALYTICS_CANDIDATE_LIMIT
+  );
+
+  return Math.max(1, Math.min(Math.floor(rawLimit), DEFAULT_ANALYTICS_CANDIDATE_LIMIT));
+}
+
 function getEstimatedScoringRequestsPerHour(intervalMs: number, candidateLimit: number): number {
   return Math.ceil((60 * 60 * 1000 / intervalMs) * candidateLimit * BAGS_REQUESTS_PER_SCORE_CANDIDATE);
+}
+
+function getEstimatedAnalyticsRequestsPerHour(intervalMs: number, candidateLimit: number): number {
+  return Math.ceil((60 * 60 * 1000 / intervalMs) * candidateLimit * BAGS_REQUESTS_PER_ANALYTICS_CANDIDATE);
 }
 
 function getSupabaseCacheClient(): SupabaseClient<BagsDiscoveryDatabase> {
@@ -333,6 +432,16 @@ function assertScoringCadence(intervalMs: number, candidateLimit: number) {
   }
 }
 
+function assertAnalyticsCadence(intervalMs: number, candidateLimit: number) {
+  const estimatedRequestsPerHour = getEstimatedAnalyticsRequestsPerHour(intervalMs, candidateLimit);
+
+  if (estimatedRequestsPerHour > BAGS_API_REQUEST_LIMIT_PER_HOUR) {
+    throw new Error(
+      `Bags token analytics cadence would use ${estimatedRequestsPerHour} requests/hour, above the ${BAGS_API_REQUEST_LIMIT_PER_HOUR} requests/hour limit`
+    );
+  }
+}
+
 async function getCacheState(client: SupabaseClient<BagsDiscoveryDatabase>, cacheKey = DISCOVERY_CACHE_KEY) {
   const { data, error } = await client
     .from('bags_cache_state')
@@ -425,6 +534,45 @@ async function upsertTokenScores(
   }
 }
 
+async function upsertTokenAnalytics(
+  client: SupabaseClient<BagsDiscoveryDatabase>,
+  analytics: BagsTokenAnalyticsInsert[]
+) {
+  if (analytics.length === 0) {
+    return;
+  }
+
+  const { error } = await client
+    .from('bags_token_analytics')
+    .upsert(analytics, {
+      onConflict: 'token_mint'
+    });
+
+  if (error) {
+    throw new Error(`Failed to upsert Bags token analytics: ${error.message}`);
+  }
+}
+
+async function upsertTokenClaimEvents(
+  client: SupabaseClient<BagsDiscoveryDatabase>,
+  events: BagsTokenClaimEventRow[]
+) {
+  if (events.length === 0) {
+    return;
+  }
+
+  // Use upsert on signature to avoid duplicates
+  const { error } = await client
+    .from('bags_token_claim_events')
+    .upsert(events, {
+      onConflict: 'signature'
+    });
+
+  if (error) {
+    throw new Error(`Failed to upsert Bags token claim events: ${error.message}`);
+  }
+}
+
 function mapScoreToRow(params: {
   launch: BagsTokenLaunchRow;
   creators: TokenLaunchCreator[];
@@ -453,14 +601,16 @@ export async function getCachedBagsDiscovery(options: {
   launchLimit?: number;
   poolLimit?: number;
   scoreLimit?: number;
+  analyticsLimit?: number;
   eligibleOnly?: boolean;
 } = {}): Promise<BagsDiscoveryCachePayload> {
   const client = getSupabaseCacheClient();
   const launchLimit = options.launchLimit ?? 100;
   const poolLimit = options.poolLimit ?? 250;
   const scoreLimit = options.scoreLimit ?? 250;
+  const analyticsLimit = options.analyticsLimit ?? 50;
 
-  const [launchesResult, poolsResult, scoresResult, state, scoreState] = await Promise.all([
+  const [launchesResult, poolsResult, scoresResult, analyticsResult, state, scoreState, analyticsState] = await Promise.all([
     client
       .from('bags_token_launches')
       .select('*')
@@ -476,8 +626,14 @@ export async function getCachedBagsDiscovery(options: {
       .select('*')
       .order('scored_at', { ascending: false })
       .limit(scoreLimit),
+    client
+      .from('bags_token_analytics')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .limit(analyticsLimit),
     getCacheState(client),
-    getCacheState(client, SCORING_CACHE_KEY)
+    getCacheState(client, SCORING_CACHE_KEY),
+    getCacheState(client, ANALYTICS_CACHE_KEY)
   ]);
 
   if (launchesResult.error) {
@@ -492,6 +648,10 @@ export async function getCachedBagsDiscovery(options: {
     throw new Error(`Failed to read cached Bags token scores: ${scoresResult.error.message}`);
   }
 
+  if (analyticsResult.error) {
+    throw new Error(`Failed to read cached Bags token analytics: ${analyticsResult.error.message}`);
+  }
+
   const scores = scoresResult.data ?? [];
   const scoresByMint = new Map(scores.map((score) => [score.token_mint, score]));
   const launches = launchesResult.data ?? [];
@@ -502,8 +662,10 @@ export async function getCachedBagsDiscovery(options: {
     eligibleLaunches,
     pools: poolsResult.data ?? [],
     scores,
+    analytics: analyticsResult.data ?? [],
     cacheState: state,
-    scoreCacheState: scoreState
+    scoreCacheState: scoreState,
+    analyticsCacheState: analyticsState
   };
 }
 
@@ -717,6 +879,131 @@ export async function refreshBagsTokenScores(
     cacheState,
     minRefreshIntervalMs,
     estimatedMaxRequestsPerHour: getEstimatedScoringRequestsPerHour(minRefreshIntervalMs, candidateLimit),
+    externalRequestsUsed,
+    rateLimit
+  };
+}
+
+export async function refreshBagsTokenAnalytics(
+  options: RefreshBagsTokenAnalyticsOptions = {}
+): Promise<RefreshBagsTokenAnalyticsResult> {
+  const client = getSupabaseCacheClient();
+  const candidateLimit = getAnalyticsCandidateLimit(options.limit);
+  const minRefreshIntervalMs = getAnalyticsRefreshIntervalMs();
+  assertAnalyticsCadence(minRefreshIntervalMs, candidateLimit);
+
+  const existingState = await getCacheState(client, ANALYTICS_CACHE_KEY);
+  const nowMs = Date.now();
+
+  if (
+    !options.force &&
+    existingState?.expires_at &&
+    new Date(existingState.expires_at).getTime() > nowMs
+  ) {
+    const metadata = existingState.metadata as {
+      refreshedCount?: number;
+      eventCount?: number;
+      externalRequestsUsed?: number;
+    } | null;
+
+    return {
+      refreshed: false,
+      skippedReason: 'fresh',
+      refreshedCount: metadata?.refreshedCount ?? 0,
+      eventCount: metadata?.eventCount ?? 0,
+      cacheState: existingState,
+      minRefreshIntervalMs,
+      estimatedMaxRequestsPerHour: getEstimatedAnalyticsRequestsPerHour(minRefreshIntervalMs, candidateLimit),
+      externalRequestsUsed: metadata?.externalRequestsUsed ?? 0,
+      rateLimit: getRateLimitStatus()
+    };
+  }
+
+  // Get eligible tokens to refresh analytics for
+  const { eligibleLaunches } = await getCachedBagsDiscovery({
+    scoreLimit: candidateLimit * 2
+  });
+  
+  const candidates = eligibleLaunches.slice(0, candidateLimit);
+  const refreshedAt = new Date(nowMs).toISOString();
+  const expiresAt = new Date(nowMs + minRefreshIntervalMs).toISOString();
+  const analyticsRows: BagsTokenAnalyticsInsert[] = [];
+  const allEvents: BagsTokenClaimEventRow[] = [];
+  const requestIds: string[] = [];
+  let externalRequestsUsed = 0;
+
+  for (const launch of candidates) {
+    try {
+      const { getTokenLifetimeFees, getTokenClaimStats, getTokenClaimEvents } = await import('@/lib/bags/client');
+      
+      const [feesResponse, statsResponse, eventsResponse] = await Promise.all([
+        getTokenLifetimeFees(launch.token_mint),
+        getTokenClaimStats(launch.token_mint),
+        getTokenClaimEvents({ tokenMint: launch.token_mint, limit: 100 })
+      ]);
+
+      externalRequestsUsed += 3;
+      if (feesResponse.requestId) requestIds.push(feesResponse.requestId);
+      if (statsResponse.requestId) requestIds.push(statsResponse.requestId);
+      if (eventsResponse.requestId) requestIds.push(eventsResponse.requestId);
+
+      analyticsRows.push({
+        token_mint: launch.token_mint,
+        lifetime_fees_lamports: feesResponse.data.lifetimeFeesLamports,
+        total_claimers: statsResponse.data.total,
+        claim_stats: statsResponse.data.creators as unknown as Json,
+        last_refreshed_at: refreshedAt,
+        updated_at: refreshedAt
+      });
+
+      const events = eventsResponse.data.events.map(event => ({
+        signature: event.signature,
+        token_mint: launch.token_mint,
+        wallet_address: event.wallet,
+        amount_lamports: event.amount,
+        is_creator: event.isCreator,
+        event_timestamp: event.timestamp,
+        created_at: refreshedAt
+      }));
+      
+      allEvents.push(...events);
+    } catch (error) {
+      console.error(`Failed to refresh analytics for ${launch.token_mint}:`, error);
+      externalRequestsUsed += 3; // Count as used even if failed for rate limit safety
+    }
+  }
+
+  await Promise.all([
+    upsertTokenAnalytics(client, analyticsRows),
+    upsertTokenClaimEvents(client, allEvents)
+  ]);
+
+  const rateLimit = getRateLimitStatus();
+  const cacheState = await upsertCacheState(client, {
+    cache_key: ANALYTICS_CACHE_KEY,
+    last_refreshed_at: refreshedAt,
+    expires_at: expiresAt,
+    source_request_ids: requestIds,
+    rate_limit_remaining: rateLimit.remaining,
+    rate_limit_reset: toRateLimitResetIso(rateLimit.reset),
+    metadata: {
+      refreshedCount: analyticsRows.length,
+      eventCount: allEvents.length,
+      candidateLimit,
+      requestsPerCandidate: BAGS_REQUESTS_PER_ANALYTICS_CANDIDATE,
+      externalRequestsUsed,
+      estimatedMaxRequestsPerHour: getEstimatedAnalyticsRequestsPerHour(minRefreshIntervalMs, candidateLimit)
+    },
+    updated_at: refreshedAt
+  });
+
+  return {
+    refreshed: true,
+    refreshedCount: analyticsRows.length,
+    eventCount: allEvents.length,
+    cacheState,
+    minRefreshIntervalMs,
+    estimatedMaxRequestsPerHour: getEstimatedAnalyticsRequestsPerHour(minRefreshIntervalMs, candidateLimit),
     externalRequestsUsed,
     rateLimit
   };
