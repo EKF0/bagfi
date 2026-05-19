@@ -78,3 +78,74 @@ $$;
 -- CREATE POLICY "Users can view own profile" ON users
 -- FOR SELECT
 -- USING (wallet_address = coalesce(nullif(current_setting('request.jwt.claims')::json ->> 'wallet_address', ''), ''));
+
+-- 3. Bags public cache tables
+-- These contain public Bags.fm discovery metadata. Clients may read them, but
+-- only server-side service-role jobs should write refresh results.
+
+ALTER TABLE bags_token_launches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_pools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_cache_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_token_scores ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON TABLE bags_token_launches TO anon, authenticated;
+GRANT SELECT ON TABLE bags_pools TO anon, authenticated;
+GRANT SELECT ON TABLE bags_cache_state TO anon, authenticated;
+GRANT SELECT ON TABLE bags_token_scores TO anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_token_launches TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_pools TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_cache_state TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_token_scores TO service_role;
+
+DROP POLICY IF EXISTS "Public can view Bags token launches" ON bags_token_launches;
+CREATE POLICY "Public can view Bags token launches" ON bags_token_launches
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Public can view Bags pools" ON bags_pools;
+CREATE POLICY "Public can view Bags pools" ON bags_pools
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Public can view Bags cache state" ON bags_cache_state;
+CREATE POLICY "Public can view Bags cache state" ON bags_cache_state
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Public can view Bags token scores" ON bags_token_scores;
+CREATE POLICY "Public can view Bags token scores" ON bags_token_scores
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags token launches" ON bags_token_launches;
+CREATE POLICY "Service role can manage Bags token launches" ON bags_token_launches
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags pools" ON bags_pools;
+CREATE POLICY "Service role can manage Bags pools" ON bags_pools
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags cache state" ON bags_cache_state;
+CREATE POLICY "Service role can manage Bags cache state" ON bags_cache_state
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role can manage Bags token scores" ON bags_token_scores;
+CREATE POLICY "Service role can manage Bags token scores" ON bags_token_scores
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);

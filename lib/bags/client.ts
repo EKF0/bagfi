@@ -63,6 +63,53 @@ export interface BagsApiErrorResponse {
   rateLimit?: RateLimitState;
 }
 
+interface BagsApiEnvelope<T> {
+  success: boolean;
+  response?: T;
+  error?: string;
+}
+
+interface RawTradeQuoteRouteStep {
+  venue?: string;
+  inAmount?: string;
+  outAmount?: string;
+  inputMint?: string;
+  outputMint?: string;
+  inputMintDecimals?: number;
+  outputMintDecimals?: number;
+  marketKey?: string;
+  data?: string;
+  swapInfo?: TradeQuoteResponse['routePlan'][number]['swapInfo'];
+  percent?: number;
+}
+
+interface RawTradeQuoteResponse {
+  requestId?: string;
+  contextSlot: number;
+  inAmount?: string;
+  inputAmount?: string;
+  inputMint?: string;
+  outAmount?: string;
+  outputAmount?: string;
+  outputMint?: string;
+  minOutAmount?: string;
+  otherAmountThreshold?: string;
+  swapMode?: string;
+  priceImpactPct: string;
+  slippageBps: number;
+  routePlan: RawTradeQuoteRouteStep[];
+  platformFee: string | null | {
+    amount: string;
+    feeBps: number;
+    feeAccount: string;
+    segmenterFeeAmount: string;
+    segmenterFeePct: number;
+  };
+  outTransferFee?: string | null;
+  simulatedComputeUnits?: number | null;
+  timeTaken?: number;
+}
+
 /**
  * Get the Bags API key from environment
  * @throws {Error} If BAGS_API_KEY is not set
@@ -217,6 +264,25 @@ export function isRateLimitLow(threshold = 100): boolean {
   return rateLimitState.remaining < threshold;
 }
 
+function unwrapBagsResponse<T>(
+  apiResponse: BagsApiResponse<BagsApiEnvelope<T>>,
+  fallbackMessage: string
+): BagsApiResponse<T> {
+  if (!apiResponse.data.success || apiResponse.data.response === undefined) {
+    throw new BagsApiError(
+      apiResponse.data.error || fallbackMessage,
+      502,
+      'BAGS_RESPONSE_ERROR',
+      apiResponse.requestId
+    );
+  }
+
+  return {
+    ...apiResponse,
+    data: apiResponse.data.response
+  };
+}
+
 // ==========================================
 // Typed API Methods
 // ==========================================
@@ -229,11 +295,13 @@ export interface TradeQuoteRequest {
   inputMint: string;
   outputMint: string;
   amount: string;
+  slippageMode?: 'auto' | 'manual';
   slippageBps?: number;
   userPublicKey?: string;
 }
 
 export interface TradeQuoteResponse {
+  requestId?: string;
   inputAmount: string;
   outputAmount: string;
   otherAmountThreshold: string;
@@ -255,7 +323,64 @@ export interface TradeQuoteResponse {
     percent: number;
   }>;
   contextSlot: number;
-  timeTaken: number;
+  timeTaken?: number;
+  inAmount?: string;
+  outAmount?: string;
+  minOutAmount?: string;
+  inputMint?: string;
+  outputMint?: string;
+  outTransferFee?: string | null;
+  simulatedComputeUnits?: number | null;
+}
+
+function normalizeTradeQuoteResponse(rawQuote: RawTradeQuoteResponse): TradeQuoteResponse {
+  const inputAmount = rawQuote.inputAmount ?? rawQuote.inAmount ?? '0';
+  const outputAmount = rawQuote.outputAmount ?? rawQuote.outAmount ?? '0';
+  const otherAmountThreshold = rawQuote.otherAmountThreshold ?? rawQuote.minOutAmount ?? outputAmount;
+
+  return {
+    requestId: rawQuote.requestId,
+    inputAmount,
+    outputAmount,
+    otherAmountThreshold,
+    swapMode: rawQuote.swapMode ?? 'ExactIn',
+    slippageBps: rawQuote.slippageBps,
+    platformFee: typeof rawQuote.platformFee === 'string'
+      ? rawQuote.platformFee
+      : rawQuote.platformFee?.amount ?? null,
+    priceImpactPct: rawQuote.priceImpactPct,
+    routePlan: rawQuote.routePlan.map((step) => {
+      if (step.swapInfo) {
+        return {
+          swapInfo: step.swapInfo,
+          percent: step.percent ?? 100
+        };
+      }
+
+      return {
+        swapInfo: {
+          ammKey: step.marketKey ?? '',
+          label: step.venue ?? 'Unknown venue',
+          inputMint: step.inputMint ?? rawQuote.inputMint ?? '',
+          outputMint: step.outputMint ?? rawQuote.outputMint ?? '',
+          inAmount: step.inAmount ?? inputAmount,
+          outAmount: step.outAmount ?? outputAmount,
+          feeAmount: '0',
+          feeMint: step.inputMint ?? rawQuote.inputMint ?? ''
+        },
+        percent: step.percent ?? Math.floor(100 / Math.max(rawQuote.routePlan.length, 1))
+      };
+    }),
+    contextSlot: rawQuote.contextSlot,
+    timeTaken: rawQuote.timeTaken,
+    inAmount: rawQuote.inAmount ?? inputAmount,
+    outAmount: rawQuote.outAmount ?? outputAmount,
+    minOutAmount: rawQuote.minOutAmount ?? otherAmountThreshold,
+    inputMint: rawQuote.inputMint,
+    outputMint: rawQuote.outputMint,
+    outTransferFee: rawQuote.outTransferFee,
+    simulatedComputeUnits: rawQuote.simulatedComputeUnits
+  };
 }
 
 export async function getTradeQuote(params: TradeQuoteRequest): Promise<BagsApiResponse<TradeQuoteResponse>> {
@@ -263,10 +388,28 @@ export async function getTradeQuote(params: TradeQuoteRequest): Promise<BagsApiR
   queryParams.set('inputMint', params.inputMint);
   queryParams.set('outputMint', params.outputMint);
   queryParams.set('amount', params.amount);
+  queryParams.set('slippageMode', params.slippageMode ?? (params.slippageBps !== undefined ? 'manual' : 'auto'));
   if (params.slippageBps !== undefined) queryParams.set('slippageBps', params.slippageBps.toString());
   if (params.userPublicKey) queryParams.set('userPublicKey', params.userPublicKey);
-  
-  return bagsRequest<TradeQuoteResponse>(`/trade/quote?${queryParams.toString()}`);
+
+  const response = await bagsRequest<BagsApiEnvelope<RawTradeQuoteResponse> | RawTradeQuoteResponse>(`/trade/quote?${queryParams.toString()}`);
+
+  if ('success' in response.data) {
+    const unwrapped = unwrapBagsResponse(
+      response as BagsApiResponse<BagsApiEnvelope<RawTradeQuoteResponse>>,
+      'Invalid trade quote response from Bags API'
+    );
+
+    return {
+      ...unwrapped,
+      data: normalizeTradeQuoteResponse(unwrapped.data)
+    };
+  }
+
+  return {
+    ...response,
+    data: normalizeTradeQuoteResponse(response.data as RawTradeQuoteResponse)
+  };
 }
 
 /**
@@ -298,36 +441,41 @@ export async function createSwapTransaction(params: SwapTransactionRequest): Pro
  * Token Launch Feed
  * GET /token-launch/feed
  */
+export type TokenLaunchStatus = 'PRE_LAUNCH' | 'LAUNCHED' | 'FAILED' | 'CANCELLED' | string;
+
 export interface TokenLaunch {
-  mint: string;
+  tokenMint: string;
   name: string;
   symbol: string;
-  description: string;
-  imageUrl: string;
-  creator: string;
-  createdAt: string;
-  liquidityUsd: string;
-  marketCapUsd: string;
-  volume24hUsd: string;
-  priceUsd: string;
-  priceChange24hPct: string;
-  holders: number;
-  isVerified: boolean;
+  description?: string | null;
+  image?: string | null;
+  status: TokenLaunchStatus;
+  twitter?: string | null;
+  website?: string | null;
+  launchSignature?: string | null;
+  accountKeys?: string[];
+  numRequiredSigners?: number;
+  uri?: string | null;
+  dbcPoolKey?: string | null;
+  dbcConfigKey?: string | null;
 }
 
 export interface TokenLaunchFeedResponse {
-  tokens: TokenLaunch[];
+  launches: TokenLaunch[];
   total: number;
-  page: number;
-  pageSize: number;
 }
 
-export async function getTokenLaunchFeed(page = 1, pageSize = 50): Promise<BagsApiResponse<TokenLaunchFeedResponse>> {
-  const queryParams = new URLSearchParams();
-  queryParams.set('page', page.toString());
-  queryParams.set('pageSize', pageSize.toString());
-  
-  return bagsRequest<TokenLaunchFeedResponse>(`/token-launch/feed?${queryParams.toString()}`);
+export async function getTokenLaunchFeed(): Promise<BagsApiResponse<TokenLaunchFeedResponse>> {
+  const response = await bagsRequest<BagsApiEnvelope<TokenLaunch[]>>('/token-launch/feed');
+  const unwrapped = unwrapBagsResponse(response, 'Invalid token launch feed response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      launches: unwrapped.data,
+      total: unwrapped.data.length
+    }
+  };
 }
 
 /**
@@ -335,17 +483,10 @@ export async function getTokenLaunchFeed(page = 1, pageSize = 50): Promise<BagsA
  * GET /solana/bags/pools
  */
 export interface BagsPool {
-  poolAddress: string;
-  tokenAMint: string;
-  tokenBMint: string;
-  tokenASymbol: string;
-  tokenBSymbol: string;
-  tokenAReserve: string;
-  tokenBReserve: string;
-  liquidityUsd: string;
-  volume24hUsd: string;
-  feeRateBps: number;
-  apr24h: string;
+  tokenMint: string;
+  dbcConfigKey: string;
+  dbcPoolKey: string;
+  dammV2PoolKey: string;
 }
 
 export interface BagsPoolsResponse {
@@ -353,8 +494,68 @@ export interface BagsPoolsResponse {
   total: number;
 }
 
-export async function getBagsPools(): Promise<BagsApiResponse<BagsPoolsResponse>> {
-  return bagsRequest<BagsPoolsResponse>('/solana/bags/pools');
+export interface BagsPoolsRequest {
+  onlyMigrated?: boolean;
+}
+
+export async function getBagsPools(params: BagsPoolsRequest = {}): Promise<BagsApiResponse<BagsPoolsResponse>> {
+  const queryParams = new URLSearchParams();
+  if (params.onlyMigrated !== undefined) {
+    queryParams.set('onlyMigrated', String(params.onlyMigrated));
+  }
+
+  const queryString = queryParams.toString();
+  const endpoint = queryString
+    ? `/solana/bags/pools?${queryString}`
+    : '/solana/bags/pools';
+  const response = await bagsRequest<BagsApiEnvelope<BagsPool[]>>(endpoint);
+  const unwrapped = unwrapBagsResponse(response, 'Invalid Bags pool response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      pools: unwrapped.data,
+      total: unwrapped.data.length
+    }
+  };
+}
+
+/**
+ * Token Launch Creators
+ * GET /token-launch/creator/v3
+ */
+export interface TokenLaunchCreator {
+  username?: string | null;
+  pfp?: string | null;
+  royaltyBps?: number | null;
+  isCreator?: boolean;
+  wallet?: string | null;
+  provider?: string | null;
+  providerUsername?: string | null;
+  twitterUsername?: string | null;
+  bagsUsername?: string | null;
+  isAdmin?: boolean;
+}
+
+export interface TokenLaunchCreatorsResponse {
+  creators: TokenLaunchCreator[];
+  total: number;
+}
+
+export async function getTokenLaunchCreators(tokenMint: string): Promise<BagsApiResponse<TokenLaunchCreatorsResponse>> {
+  const queryParams = new URLSearchParams();
+  queryParams.set('tokenMint', tokenMint);
+
+  const response = await bagsRequest<BagsApiEnvelope<TokenLaunchCreator[]>>(`/token-launch/creator/v3?${queryParams.toString()}`);
+  const unwrapped = unwrapBagsResponse(response, 'Invalid token launch creators response from Bags API');
+
+  return {
+    ...unwrapped,
+    data: {
+      creators: unwrapped.data,
+      total: unwrapped.data.length
+    }
+  };
 }
 
 /**

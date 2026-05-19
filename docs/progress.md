@@ -18,7 +18,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 
 ---
 
-## Current Status (Updated: 2026-05-16)
+## Current Status (Updated: 2026-05-18)
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -47,10 +47,53 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL2-03** | ✅ completed | Solana transaction review and simulation UX |
 | **SOL2-04** | ✅ completed | Smart Bag deposit and rebalance session engine |
 | **SOL2-05** | ✅ completed | Portfolio reconciliation with real on-chain balances |
+| **SOL3-01** | ✅ completed | Bags launch feed and pool state cached in Supabase |
+| **SOL3-02** | ✅ completed | Bags token risk scoring with eligible-only discovery filter |
+| **SOL3-03** | ✅ completed | Solana Smart Bag catalog and allocation templates |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL3-03 completed
+- Designed and implemented three thematic Solana Smart Bag templates:
+  - **Solana Blue Chip Bag** (Medium Risk): Core exposure with SOL, JitoSOL, JUP, and USDC.
+  - **Solana DeFi Growth Bag** (High Risk): Ecosystem momentum with JUP, PYTH, DRIFT, SOL, and JTO.
+  - **Stable Reserve Bag** (Low Risk): Capital preservation with USDC, USDT, and SOL.
+- Expanded `lib/smart-bags/catalog.ts` with verified mint addresses for PYTH, DRIFT, JTO, and WIF.
+- Updated `lib/solana/balances.ts` with simulated prices for the new assets to ensure UI consistency.
+- All templates use BPS for allocations, have explicit risk tiers, rebalance thresholds, and slippage caps.
+- Validation: `npm run lint` (0 errors), `npm run build` (all 11 pages pass).
+
+### 2026-05-18 — SOL3-02 completed
+- Added Bags token risk and eligibility scoring:
+  - Metadata filters: launched status, name/symbol, image, metadata URI, and social/website warnings
+  - Pool/liquidity filters: cached pool row, DBC pool key, migrated DAMM v2 pool key
+  - Creator filters: Bags creator lookup with primary wallet/provider checks and royalty concentration warning
+  - Price-impact filters: small USDC quote probe with hard rejection above 5% impact
+- Updated `lib/bags/client.ts` to normalize current Bags quote envelopes into the app's existing quote shape and added `getTokenLaunchCreators`
+- Created `lib/bags/risk-scoring.ts` for deterministic scoring and risk tiers
+- Extended `lib/bags/discovery-cache.ts` to persist `bags_token_scores`, return `eligibleLaunches`, and refresh scores under a capped cadence
+- Updated `/api/bags/discovery`:
+  - `GET ?eligibleOnly=true` returns only scored eligible launches in `launches`
+  - `POST ?score=true` refreshes discovery data and then risk scores
+- Extended Supabase SQL/RLS for public score reads and service-role score writes
+- Scoring cadence defaults to 15 minutes, clamps to at least 5 minutes, scores up to 20 candidates per run, and is capped at 480 Bags API requests/hour at the minimum interval
+- Validation: `npm run lint` (0 errors), `npm run build` (all 11 pages + dynamic API route)
+
+### 2026-05-17 — SOL3-01 completed
+- Updated Bags discovery client types for current Bags API response envelopes:
+  - `GET /token-launch/feed` normalized into `launches` + `total`
+  - `GET /solana/bags/pools` normalized into `pools` + `total`, with `onlyMigrated` support
+- Created `lib/bags/discovery-cache.ts` — server-only Supabase cache writer/reader for Bags token launches, pool state, and freshness metadata
+- Added `/api/bags/discovery`:
+  - `GET` returns cached launch and pool data
+  - `POST` refreshes the cache, is secret-gated in production, and enforces a minimum refresh interval
+- Extended Supabase SQL with `bags_token_launches`, `bags_pools`, and `bags_cache_state`
+- RLS is enabled with public read policies and service-role write policies for the Bags cache tables
+- Added cache environment docs for `SUPABASE_SERVICE_ROLE_KEY`, `BAGS_CACHE_REFRESH_SECRET`, and `BAGS_DISCOVERY_REFRESH_INTERVAL_MS`
+- Refresh cadence defaults to 5 minutes and clamps to at least 60 seconds, meaning 2 Bags API calls per refresh and at most 120 requests/hour if configured at the minimum, below the 1000 requests/hour limit
+- Validation: `npm run lint` (0 errors), `npm run build` (all 11 pages + new dynamic API route)
 
 ### 2026-05-16 — SOL2-05 completed
 - Created `lib/solana/balances.ts` — fetches native SOL + SPL token balances via Solana RPC (`getBalance` + `getParsedTokenAccountsByOwner`), enriches with catalog metadata, filters dust

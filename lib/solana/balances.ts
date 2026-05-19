@@ -38,6 +38,10 @@ const PRICE_MAP: Record<string, number> = {
   JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: 0.88,        // JUP
   DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263: 0.000013,  // BONK
   J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn: 200.0,     // JitoSOL
+  HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3: 0.45,       // PYTH
+  DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7: 0.60,       // DRIFT
+  jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL: 2.80,        // JTO
+  EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm: 2.50,        // WIF
 };
 
 // ── Known Token Metadata ────────────────────────────────────────────────
