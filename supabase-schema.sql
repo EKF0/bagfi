@@ -152,3 +152,39 @@ CREATE INDEX IF NOT EXISTS idx_bags_token_claim_events_token_mint_timestamp
 
 CREATE INDEX IF NOT EXISTS idx_bags_token_claim_events_wallet_address
   ON bags_token_claim_events(wallet_address);
+
+-- 10. Smart Bag Sessions (Persistent user sessions)
+CREATE TABLE IF NOT EXISTS smart_bag_sessions (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  wallet_address text NOT NULL REFERENCES users(wallet_address),
+  bag_id text NOT NULL,
+  status text NOT NULL CHECK (status IN ('idle', 'depositing', 'confirming', 'success', 'error')),
+  deposit_amount text,
+  deposit_mint text,
+  steps jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_step_index integer NOT NULL DEFAULT 0,
+  tx_signatures text[] NOT NULL DEFAULT '{}',
+  error_message text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_smart_bag_sessions_wallet_status
+  ON smart_bag_sessions(wallet_address, status);
+
+-- 11. Bags user fee positions cache
+CREATE TABLE IF NOT EXISTS bags_user_fee_positions (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  wallet_address text NOT NULL REFERENCES users(wallet_address),
+  token_mint text NOT NULL REFERENCES bags_token_launches(token_mint),
+  claimable_lamports text NOT NULL DEFAULT '0',
+  last_claim_at timestamp with time zone,
+  total_claimed_lamports text NOT NULL DEFAULT '0',
+  raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  UNIQUE(wallet_address, token_mint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bags_user_fee_positions_wallet
+  ON bags_user_fee_positions(wallet_address);

@@ -52,10 +52,19 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL3-03** | ✅ completed | Solana Smart Bag catalog and allocation templates |
 | **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
+| **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL6-01 completed
+- Formalized Supabase schema for Solana Smart Bags and Bags caches:
+  - Added `smart_bag_sessions` for persistent multi-step session tracking.
+  - Added `bags_user_fee_positions` for high-performance user earnings caching.
+  - Established comprehensive RLS policies for all 7 Bags-related tables.
+  - Optimized schema with indices for performance at scale.
+- Validation: SQL structure audit, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL4-02 completed
 - Built claimable fee positions and claim transaction flow:

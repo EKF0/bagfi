@@ -185,3 +185,56 @@ FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
+
+-- 5. User private tables
+ALTER TABLE smart_bag_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_user_fee_positions ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view their own smart bag sessions
+CREATE POLICY "Users can view own sessions" ON smart_bag_sessions
+FOR SELECT
+USING (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));
+
+-- Policy: Users can insert their own smart bag sessions
+CREATE POLICY "Users can insert own sessions" ON smart_bag_sessions
+FOR INSERT
+WITH CHECK (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));
+
+-- Policy: Users can update their own smart bag sessions
+CREATE POLICY "Users can update own sessions" ON smart_bag_sessions
+FOR UPDATE
+USING (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+))
+WITH CHECK (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));
+
+-- Policy: Users can view their own fee positions
+CREATE POLICY "Users can view own fee positions" ON bags_user_fee_positions
+FOR SELECT
+USING (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));
+
+-- Policy: Service role can manage all private tables
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE smart_bag_sessions TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_user_fee_positions TO service_role;
+
+DROP POLICY IF EXISTS "Service role can manage all sessions" ON smart_bag_sessions;
+CREATE POLICY "Service role can manage all sessions" ON smart_bag_sessions
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role can manage all fee positions" ON bags_user_fee_positions;
+CREATE POLICY "Service role can manage all fee positions" ON bags_user_fee_positions
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
