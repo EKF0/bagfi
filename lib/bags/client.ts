@@ -5,6 +5,7 @@
  */
 
 import { validateServerEnvironment } from '@/lib/env';
+import telemetry from '@/lib/telemetry';
 
 const BASE_URL = 'https://public-api-v2.bags.fm/api/v1';
 
@@ -15,7 +16,7 @@ interface RateLimitState {
   limit: number;
 }
 
-let rateLimitState: RateLimitState = {
+const rateLimitState: RateLimitState = {
   remaining: 1000,
   reset: 0,
   limit: 1000
@@ -23,16 +24,13 @@ let rateLimitState: RateLimitState = {
 
 // Retry configuration
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
+const INITIAL_RETRY_DELAY_MS = 1000;
 
-/**
- * Normalized error from Bags API
- */
 export class BagsApiError extends Error {
   constructor(
     message: string,
     public statusCode: number,
-    public code?: string,
+    public code: string,
     public requestId?: string
   ) {
     super(message);
@@ -40,74 +38,138 @@ export class BagsApiError extends Error {
   }
 }
 
-/**
- * Normalized success response
- */
 export interface BagsApiResponse<T> {
-  success: true;
+  success: boolean;
   data: T;
   requestId?: string;
   rateLimit?: RateLimitState;
 }
 
 /**
- * Normalized error response
+ * Standard Bags API Response Envelope
  */
-export interface BagsApiErrorResponse {
-  success: false;
-  error: {
-    message: string;
-    code?: string;
-  };
-  requestId?: string;
-  rateLimit?: RateLimitState;
-}
-
-interface BagsApiEnvelope<T> {
+export interface BagsApiEnvelope<T> {
   success: boolean;
-  response?: T;
-  error?: string;
+  response: T;
 }
 
-interface RawTradeQuoteRouteStep {
-  venue?: string;
-  inAmount?: string;
-  outAmount?: string;
-  inputMint?: string;
-  outputMint?: string;
-  inputMintDecimals?: number;
-  outputMintDecimals?: number;
-  marketKey?: string;
-  data?: string;
-  swapInfo?: TradeQuoteResponse['routePlan'][number]['swapInfo'];
-  percent?: number;
-}
+/**
+ * Generic request wrapper for Bags.fm API
+ */
+async function bagsRequest<T>(endpoint: string, options: RequestInit = {}): Promise<BagsApiResponse<T>> {
+  const apiKey = getApiKey();
+  const url = `${BASE_URL}${endpoint}`;
+  const requestId = `bags-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const startTime = Date.now();
+  
+  let lastError: unknown;
+  
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'x-request-id': requestId,
+          ...options.headers
+        }
+      });
+      
+      updateRateLimits(response.headers);
+      const durationMs = Date.now() - startTime;
+      
+      // Parse response
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch {
+        const parseError = 'Invalid JSON response from Bags API';
+        telemetry.trackBagsRequest({
+          endpoint,
+          method: options.method || 'GET',
+          status: response.status,
+          durationMs,
+          requestId,
+          error: parseError
+        });
+        throw new BagsApiError(
+          parseError,
+          response.status,
+          'PARSE_ERROR',
+          requestId
+        );
+      }
+      
+      if (!response.ok) {
+        // Normalize Bags error format
+        const errorData = data as Record<string, unknown>;
+        const errorMessage = (errorData.message as string) || (errorData.error as string) || `Bags API error: ${response.status}`;
+        
+        telemetry.trackBagsRequest({
+          endpoint,
+          method: options.method || 'GET',
+          status: response.status,
+          durationMs,
+          requestId,
+          rateLimitRemaining: rateLimitState.remaining,
+          rateLimitReset: rateLimitState.reset,
+          error: errorMessage
+        });
 
-interface RawTradeQuoteResponse {
-  requestId?: string;
-  contextSlot: number;
-  inAmount?: string;
-  inputAmount?: string;
-  inputMint?: string;
-  outAmount?: string;
-  outputAmount?: string;
-  outputMint?: string;
-  minOutAmount?: string;
-  otherAmountThreshold?: string;
-  swapMode?: string;
-  priceImpactPct: string;
-  slippageBps: number;
-  routePlan: RawTradeQuoteRouteStep[];
-  platformFee: string | null | {
-    amount: string;
-    feeBps: number;
-    feeAccount: string;
-    segmenterFeeAmount: string;
-    segmenterFeePct: number;
-  };
-  outTransferFee?: string | null;
-  simulatedComputeUnits?: number | null;
-  timeTaken?: number;
+        throw new BagsApiError(
+          errorMessage,
+          response.status,
+          (errorData.code as string) || `HTTP_${response.status}`,
+          requestId
+        );
+      }
+      
+      telemetry.trackBagsRequest({
+        endpoint,
+        method: options.method || 'GET',
+        status: response.status,
+        durationMs,
+        requestId,
+        rateLimitRemaining: rateLimitState.remaining,
+        rateLimitReset: rateLimitState.reset
+      });
+
+      return {
+        success: true,
+        data: data as T,
+        requestId,
+        rateLimit: { ...rateLimitState }
+      };
+      
+    } catch (error) {
+      lastError = error;
+      
+      if (!shouldRetry(error, attempt)) {
+        break;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`⚠️  Bags API request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${errorMessage}. Retrying...`);
+      await delay(attempt);
+    }
+  }
+  
+  const durationMs = Date.now() - startTime;
+  const finalError = lastError instanceof BagsApiError 
+    ? lastError 
+    : new BagsApiError(lastError instanceof Error ? lastError.message : 'Unknown error', 0, 'UNKNOWN_ERROR', requestId);
+
+  telemetry.trackBagsRequest({
+    endpoint,
+    method: options.method || 'GET',
+    status: finalError.statusCode,
+    durationMs,
+    requestId,
+    error: finalError.message
+  });
+
+  throw finalError;
 }
 
 /**
@@ -148,238 +210,106 @@ function shouldRetry(error: unknown, attempt: number): boolean {
   if (attempt >= MAX_RETRIES) return false;
   
   if (error instanceof BagsApiError) {
-    // Retry on rate limit (429) and server errors (5xx)
-    return error.statusCode === 429 || error.statusCode >= 500;
+    // Retry on 5xx or specific network-like errors
+    return error.statusCode >= 500 || error.statusCode === 429;
   }
   
-  // Retry on network errors
-  return true;
+  return true; // Retry on network errors
 }
 
 /**
- * Delay for retry with exponential backoff
+ * Helper for exponential backoff
  */
-function delay(attempt: number): Promise<void> {
-  const ms = RETRY_DELAY_MS * Math.pow(2, attempt);
+async function delay(attempt: number): Promise<void> {
+  const ms = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
- * Make a request to the Bags API
- * @param endpoint API endpoint path (without base URL)
- * @param options Fetch options
- * @returns Normalized response
+ * Safely unwrap a Bags API success response
  */
-export async function bagsRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<BagsApiResponse<T>> {
-  const apiKey = getApiKey();
-  const url = `${BASE_URL}${endpoint}`;
-  const requestId = `bags-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
-  let lastError: unknown;
-  
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'x-request-id': requestId,
-          ...options.headers
-        }
-      });
-      
-      updateRateLimits(response.headers);
-      
-      // Parse response
-      let data: unknown;
-      try {
-        data = await response.json();
-      } catch {
-        throw new BagsApiError(
-          'Invalid JSON response from Bags API',
-          response.status,
-          'PARSE_ERROR',
-          requestId
-        );
-      }
-      
-      if (!response.ok) {
-        // Normalize Bags error format
-        const errorData = data as Record<string, unknown>;
-        throw new BagsApiError(
-          (errorData.message as string) || (errorData.error as string) || `Bags API error: ${response.status}`,
-          response.status,
-          (errorData.code as string) || `HTTP_${response.status}`,
-          requestId
-        );
-      }
-      
-      return {
-        success: true,
-        data: data as T,
-        requestId,
-        rateLimit: { ...rateLimitState }
-      };
-      
-    } catch (error) {
-      lastError = error;
-      
-      if (!shouldRetry(error, attempt)) {
-        break;
-      }
-      
-      console.warn(`⚠️  Bags API request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${error instanceof Error ? error.message : 'Unknown error'}. Retrying...`);
-      await delay(attempt);
-    }
-  }
-  
-  // All retries exhausted
-  if (lastError instanceof BagsApiError) {
-    throw lastError;
-  }
-  
-  throw new BagsApiError(
-    lastError instanceof Error ? lastError.message : 'Unknown error',
-    0,
-    'UNKNOWN_ERROR',
-    requestId
-  );
-}
-
-/**
- * Get current rate limit status
- */
-export function getRateLimitStatus(): RateLimitState {
-  return { ...rateLimitState };
-}
-
-/**
- * Check if rate limit is approaching
- */
-export function isRateLimitLow(threshold = 100): boolean {
-  return rateLimitState.remaining < threshold;
-}
-
-function unwrapBagsResponse<T>(
-  apiResponse: BagsApiResponse<BagsApiEnvelope<T>>,
-  fallbackMessage: string
-): BagsApiResponse<T> {
-  if (!apiResponse.data.success || apiResponse.data.response === undefined) {
+export function unwrapBagsResponse<T>(envelope: BagsApiResponse<BagsApiEnvelope<T>>, errorContext: string): BagsApiResponse<T> {
+  if (!envelope.data || envelope.data.success === false) {
     throw new BagsApiError(
-      apiResponse.data.error || fallbackMessage,
-      502,
-      'BAGS_RESPONSE_ERROR',
-      apiResponse.requestId
+      `${errorContext}: API returned failure`,
+      500,
+      'API_FAILURE',
+      envelope.requestId
     );
   }
-
+  
   return {
-    ...apiResponse,
-    data: apiResponse.data.response
+    ...envelope,
+    data: envelope.data.response
   };
 }
 
-// ==========================================
-// Typed API Methods
-// ==========================================
-
 /**
- * Trade Quote
- * GET /trade/quote
+ * Rate limit status
  */
+export function getRateLimitStatus() {
+  return { ...rateLimitState };
+}
+
+export function isRateLimitLow(): boolean {
+  return rateLimitState.remaining < 100;
+}
+
+// ── Trade API ────────────────────────────────────────────────────────────
+
 export interface TradeQuoteRequest {
   inputMint: string;
   outputMint: string;
   amount: string;
-  slippageMode?: 'auto' | 'manual';
   slippageBps?: number;
+  slippageMode?: 'auto' | 'manual';
   userPublicKey?: string;
 }
 
-export interface TradeQuoteResponse {
-  requestId?: string;
+export interface RawTradeQuoteRouteStep {
+  swapInfo: {
+    ammKey: string;
+    label: string;
+    inputMint: string;
+    outputMint: string;
+    inAmount: string;
+    outAmount: string;
+    feeAmount: string;
+    feeMint: string;
+  };
+  percent: number;
+}
+
+export interface RawTradeQuoteResponse {
   inputAmount: string;
   outputAmount: string;
   otherAmountThreshold: string;
-  swapMode: string;
   slippageBps: number;
-  platformFee: string | null;
   priceImpactPct: string;
-  routePlan: Array<{
-    swapInfo: {
-      ammKey: string;
-      label: string;
-      inputMint: string;
-      outputMint: string;
-      inAmount: string;
-      outAmount: string;
-      feeAmount: string;
-      feeMint: string;
-    };
-    percent: number;
-  }>;
-  contextSlot: number;
-  timeTaken?: number;
-  inAmount?: string;
-  outAmount?: string;
-  minOutAmount?: string;
-  inputMint?: string;
-  outputMint?: string;
+  routePlan: RawTradeQuoteRouteStep[];
+  platformFee: string | null | {
+    amount: string;
+    feeBps: number;
+    feeAccount: string;
+    segmenterFeeAmount: string;
+    segmenterFeePct: number;
+  };
   outTransferFee?: string | null;
   simulatedComputeUnits?: number | null;
+  timeTaken?: number;
 }
 
-function normalizeTradeQuoteResponse(rawQuote: RawTradeQuoteResponse): TradeQuoteResponse {
-  const inputAmount = rawQuote.inputAmount ?? rawQuote.inAmount ?? '0';
-  const outputAmount = rawQuote.outputAmount ?? rawQuote.outAmount ?? '0';
-  const otherAmountThreshold = rawQuote.otherAmountThreshold ?? rawQuote.minOutAmount ?? outputAmount;
+export interface TradeQuoteResponse extends RawTradeQuoteResponse {
+  // Add any client-specific enrichments here
+}
 
+/**
+ * Normalizes Bags raw quote response into app-ready shape
+ */
+function normalizeTradeQuoteResponse(raw: RawTradeQuoteResponse): TradeQuoteResponse {
   return {
-    requestId: rawQuote.requestId,
-    inputAmount,
-    outputAmount,
-    otherAmountThreshold,
-    swapMode: rawQuote.swapMode ?? 'ExactIn',
-    slippageBps: rawQuote.slippageBps,
-    platformFee: typeof rawQuote.platformFee === 'string'
-      ? rawQuote.platformFee
-      : rawQuote.platformFee?.amount ?? null,
-    priceImpactPct: rawQuote.priceImpactPct,
-    routePlan: rawQuote.routePlan.map((step) => {
-      if (step.swapInfo) {
-        return {
-          swapInfo: step.swapInfo,
-          percent: step.percent ?? 100
-        };
-      }
-
-      return {
-        swapInfo: {
-          ammKey: step.marketKey ?? '',
-          label: step.venue ?? 'Unknown venue',
-          inputMint: step.inputMint ?? rawQuote.inputMint ?? '',
-          outputMint: step.outputMint ?? rawQuote.outputMint ?? '',
-          inAmount: step.inAmount ?? inputAmount,
-          outAmount: step.outAmount ?? outputAmount,
-          feeAmount: '0',
-          feeMint: step.inputMint ?? rawQuote.inputMint ?? ''
-        },
-        percent: step.percent ?? Math.floor(100 / Math.max(rawQuote.routePlan.length, 1))
-      };
-    }),
-    contextSlot: rawQuote.contextSlot,
-    timeTaken: rawQuote.timeTaken,
-    inAmount: rawQuote.inAmount ?? inputAmount,
-    outAmount: rawQuote.outAmount ?? outputAmount,
-    minOutAmount: rawQuote.minOutAmount ?? otherAmountThreshold,
-    inputMint: rawQuote.inputMint,
-    outputMint: rawQuote.outputMint,
-    outTransferFee: rawQuote.outTransferFee,
-    simulatedComputeUnits: rawQuote.simulatedComputeUnits
+    ...raw,
+    // Add normalization logic if needed (e.g. converting string numbers to BigInt/number)
   };
 }
 
@@ -778,7 +708,7 @@ export async function createClaimTransactions(params: ClaimTransactionRequest): 
   });
 
   if (!response.data.success) {
-    throw new BagsApiError('Failed to generate claim transactions', 500);
+    throw new BagsApiError('Failed to generate claim transactions', 500, 'CLAIM_TX_FAILED');
   }
 
   return {
@@ -794,7 +724,7 @@ export async function createClaimTransactions(params: ClaimTransactionRequest): 
 export async function healthCheck(): Promise<{ message: string }> {
   const response = await fetch(`${BASE_URL}/ping`);
   if (!response.ok) {
-    throw new BagsApiError('Bags API health check failed', response.status);
+    throw new BagsApiError('Bags API health check failed', response.status, 'HTTP_FAILED');
   }
   return response.json();
 }

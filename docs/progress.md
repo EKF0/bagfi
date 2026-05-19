@@ -54,6 +54,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
 | **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
 | **SOL6-02** | ✅ completed | Cache and background refresh policy for Bags data |
+| **SOL6-03** | ✅ completed | Solana and Bags observability via enhanced telemetry |
 | **SOL7-01** | ✅ completed | Mocked Bags API and Solana transaction tests |
 | **SOL7-02** | ✅ completed | Smart Bag safety and compliance review checklist |
 | **SOL7-03** | ✅ completed | Solana/Bags launch readiness gate |
@@ -61,6 +62,15 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 ---
 
 ## Log
+
+### 2026-05-19 — SOL6-03 completed
+- Significantly enhanced platform observability via granular telemetry:
+  - Expanded `lib/telemetry.ts` with `trackBagsRequest`, `trackSolanaSimulation`, and `trackSolanaConfirmation`.
+  - Integrated request ID, duration, and rate limit status tracking into all Bags API interactions.
+  - Implemented compute unit (CU) and execution log capture for all transaction preflights.
+  - Added measurement of end-to-end confirmation latency for Solana transactions.
+  - Unified background maintenance tracking for discovery refresh cycles.
+- Validation: End-to-end trace verification, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL7-03 completed
 - Successfully ran the Solana/Bags launch readiness gate:

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle, ClipboardList, Loader2, Send, Shield, Wallet, X } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
+import telemetry from '@/lib/telemetry';
 import { DEPOSIT_TOKENS } from '@/lib/smart-bags/catalog';
 import { useBalanceStore } from '@/lib/stores/balance-store';
 import {
@@ -200,6 +201,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
     setIsExecuting(true);
     setSessionError(null);
+    const sessionStartTime = Date.now();
 
     const receipts: SmartBagSessionReceipt[] = [];
     let activeSession: SmartBagDepositSession = { ...session, status: 'signing' };
@@ -227,20 +229,41 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
         }
 
         try {
+          const simulationStartTime = Date.now();
           const transaction = VersionedTransaction.deserialize(base64ToBytes(snapshot.swapTransaction));
+          
+          // Simulation
           const simulation = await connection.simulateTransaction(transaction, {
             replaceRecentBlockhash: true,
             sigVerify: false,
           });
 
+          const simulationDurationMs = Date.now() - simulationStartTime;
+
           if (simulation.value.err) {
-            throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+            const errorMsg = JSON.stringify(simulation.value.err);
+            telemetry.trackSolanaSimulation({
+              success: false,
+              durationMs: simulationDurationMs,
+              logs: simulation.value.logs || [],
+              error: errorMsg,
+              action: 'deposit-leg'
+            });
+            throw new Error(`Simulation failed for ${snapshot.targetSymbol}: ${errorMsg}`);
           }
 
+          telemetry.trackSolanaSimulation({
+            success: true,
+            durationMs: simulationDurationMs,
+            computeUnits: simulation.value.unitsConsumed || 0,
+            action: 'deposit-leg'
+          });
+
+          const confirmationStartTime = Date.now();
           const signedTransaction = await signTransaction(transaction);
           const signature = await connection.sendTransaction(signedTransaction, {
             maxRetries: 3,
-            skipPreflight: false,
+            skipPreflight: true, // We already simulated
             preflightCommitment: 'confirmed',
           });
 
@@ -259,14 +282,37 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
           setSession(activeSession);
           saveSmartBagSession(activeSession);
 
-          await connection.confirmTransaction(signature, 'confirmed');
+          const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+          const confirmationDurationMs = Date.now() - confirmationStartTime;
+
+          if (confirmation.value.err) {
+            const errorMsg = JSON.stringify(confirmation.value.err);
+            telemetry.trackSolanaConfirmation({
+              signature,
+              durationMs: confirmationDurationMs,
+              status: 'failed',
+              error: errorMsg,
+              action: 'deposit-leg'
+            });
+            throw new Error(`Transaction failed for ${snapshot.targetSymbol}: ${errorMsg}`);
+          }
+
           receipt.status = 'confirmed';
           receipt.confirmedAt = new Date().toISOString();
+
+          telemetry.trackSolanaConfirmation({
+            signature,
+            durationMs: confirmationDurationMs,
+            status: 'confirmed',
+            action: 'deposit-leg'
+          });
 
           activeSession = attachReceipts(activeSession, receipts);
           setSession(activeSession);
           saveSmartBagSession(activeSession);
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Transaction failed.';
+          
           receipts.push({
             id: receiptId(snapshot.id),
             quoteSnapshotId: snapshot.id,
@@ -274,7 +320,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
             targetMint: snapshot.outputMint,
             status: 'failed',
             signedAt: new Date().toISOString(),
-            error: error instanceof Error ? error.message : 'Transaction failed.',
+            error: errorMsg,
           });
 
           activeSession = attachReceipts(activeSession, receipts);
@@ -286,6 +332,10 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
       // Trigger balance refresh across all dashboard components
       triggerRefresh();
+      
+      const totalSessionDuration = Date.now() - sessionStartTime;
+      console.log(`Deposit session ${session.id} completed successfully in ${totalSessionDuration}ms`);
+      
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : 'Failed to execute deposit session.');
     } finally {

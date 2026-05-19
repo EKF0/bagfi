@@ -76,6 +76,7 @@ export function TransactionReviewModal({
     setIsSimulating(true);
     setSimulationResult('idle');
     setSimulationError(null);
+    const startTime = Date.now();
     
     try {
       const connection = new Connection(
@@ -92,22 +93,47 @@ export function TransactionReviewModal({
         sigVerify: false,
       });
       
+      const durationMs = Date.now() - startTime;
+      
       if (simulation.value.err) {
-        throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+        const errorMsg = JSON.stringify(simulation.value.err);
+        setSimulationError(errorMsg);
+        setSimulationResult('error');
+        
+        telemetry.trackSolanaSimulation({
+          success: false,
+          durationMs,
+          logs: simulation.value.logs || [],
+          error: errorMsg,
+          action: 'swap'
+        });
+      } else {
+        setSimulationResult('success');
+        telemetry.trackSolanaSimulation({
+          success: true,
+          durationMs,
+          computeUnits: simulation.value.unitsConsumed || 0,
+          action: 'swap'
+        });
+        
+        // Log simulation details
+        console.log('Simulation logs:', simulation.value.logs);
+        console.log('Compute units consumed:', simulation.value.unitsConsumed);
       }
-      
-      setSimulationResult('success');
-      telemetry.trackTransactionSimulation(true);
-      
-      // Log simulation details
-      console.log('Simulation logs:', simulation.value.logs);
-      console.log('Compute units consumed:', simulation.value.unitsConsumed);
       
     } catch (err: any) {
       console.error('Simulation error:', err);
+      const durationMs = Date.now() - startTime;
+      const errorMsg = err.message || 'Transaction simulation failed';
       setSimulationResult('error');
-      setSimulationError(err.message || 'Transaction simulation failed');
-      telemetry.trackTransactionSimulation(false, err);
+      setSimulationError(errorMsg);
+      
+      telemetry.trackSolanaSimulation({
+        success: false,
+        durationMs,
+        error: errorMsg,
+        action: 'swap'
+      });
     } finally {
       setIsSimulating(false);
     }
@@ -118,6 +144,7 @@ export function TransactionReviewModal({
     if (!quoteData.swapTransaction || !publicKey || !signTransaction) return;
     
     setIsSigning(true);
+    const startTime = Date.now();
     
     try {
       const connection = new Connection(
@@ -134,21 +161,55 @@ export function TransactionReviewModal({
       // Send transaction
       const signature = await connection.sendTransaction(signedTransaction, {
         maxRetries: 3,
-        skipPreflight: false,
+        skipPreflight: true, // We already simulated
         preflightCommitment: 'confirmed'
       });
       
       setTxSignature(signature);
-      telemetry.trackSwapTransaction(fromToken, toToken, payAmount, true, signature);
       
       // Wait for confirmation
-      await connection.confirmTransaction(signature, 'confirmed');
+      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+      const durationMs = Date.now() - startTime;
+
+      if (confirmation.value.err) {
+        const errorMsg = `Transaction failed: ${JSON.stringify(confirmation.value.err)}`;
+        
+        telemetry.trackSolanaConfirmation({
+          signature,
+          durationMs,
+          status: 'failed',
+          error: errorMsg,
+          action: 'swap'
+        });
+        
+        throw new Error(errorMsg);
+      }
+
       setIsConfirmed(true);
+      telemetry.trackSolanaConfirmation({
+        signature,
+        durationMs,
+        status: 'confirmed',
+        action: 'swap'
+      });
+      
+      telemetry.trackSwapTransaction(fromToken, toToken, payAmount, true, signature);
       
     } catch (err: any) {
       console.error('Transaction error:', err);
-      telemetry.trackSwapTransaction(fromToken, toToken, payAmount, false, undefined, err);
+      const durationMs = Date.now() - startTime;
+      setSimulationResult('error');
       setSimulationError(err.message || 'Transaction failed');
+      
+      telemetry.trackSolanaConfirmation({
+        signature: txSignature || 'unknown',
+        durationMs,
+        status: 'failed',
+        error: err.message,
+        action: 'swap'
+      });
+
+      telemetry.trackSwapTransaction(fromToken, toToken, payAmount, false, undefined, err);
     } finally {
       setIsSigning(false);
     }

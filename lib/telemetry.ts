@@ -42,7 +42,7 @@ function logEvent(type: string, message: string, data?: Record<string, any>) {
 }
 
 export const telemetry = {
-  // Track API requests
+  // Track API requests (Generic)
   trackApiRequest: (endpoint: string, method: string, status: number, durationMs: number) => {
     logEvent('api.request', `${method} ${endpoint}`, {
       endpoint,
@@ -51,8 +51,54 @@ export const telemetry = {
       duration_ms: durationMs,
     });
   },
+
+  // Track Bags API requests (Specialized)
+  trackBagsRequest: (params: {
+    endpoint: string;
+    method: string;
+    status: number;
+    durationMs: number;
+    requestId?: string;
+    rateLimitRemaining?: number;
+    rateLimitReset?: number;
+    error?: string;
+  }) => {
+    logEvent('bags.api', `${params.method} ${params.endpoint} (${params.status})`, {
+      ...params,
+      is_error: params.status >= 400,
+    });
+  },
   
-  // Track transaction simulations
+  // Track Solana Transaction Simulations
+  trackSolanaSimulation: (params: {
+    success: boolean;
+    durationMs: number;
+    computeUnits?: number;
+    logs?: string[];
+    error?: string;
+    action?: string; // e.g., 'swap', 'deposit', 'claim'
+  }) => {
+    logEvent('solana.simulation', `Simulation ${params.success ? 'Success' : 'Failed'} (${params.action})`, {
+      ...params,
+      logs: params.success ? undefined : params.logs?.slice(-10), // Only keep last 10 logs on failure
+    });
+  },
+
+  // Track Solana Transaction Confirmation
+  trackSolanaConfirmation: (params: {
+    signature: string;
+    durationMs: number;
+    status: 'confirmed' | 'finalized' | 'failed' | 'timeout';
+    error?: string;
+    action?: string;
+  }) => {
+    logEvent('solana.confirmation', `Tx ${params.status}: ${params.action}`, {
+      ...params,
+      explorer_url: `https://solscan.io/tx/${params.signature}`
+    });
+  },
+  
+  // Track transaction simulations (Deprecated: use trackSolanaSimulation)
   trackTransactionSimulation: (simulationSuccess: boolean, error?: Error) => {
     if (simulationSuccess) {
       logEvent('simulation', 'Transaction simulation successful');

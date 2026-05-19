@@ -73,7 +73,15 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     telemetry.trackApiRequest('/api/bags/refresh', 'POST', 200, duration);
     
-    // We can add a custom telemetry event for the full cycle
+    // Log detailed refresh telemetry
+    telemetry.trackUserAction('bags.refresh_cycle', {
+      durationMs: duration,
+      requestsUsed: result.totalExternalRequestsUsed,
+      discoveryRefreshed: result.discovery.refreshed,
+      scoringRefreshed: result.scoring?.refreshed || false,
+      analyticsRefreshed: result.analytics?.refreshed || false
+    });
+
     console.log(`Bags refresh cycle completed in ${duration}ms using ${result.totalExternalRequestsUsed} API calls.`);
 
     return NextResponse.json({

@@ -823,7 +823,7 @@ export async function refreshBagsTokenScores(
         slippageMode: 'auto'
       });
       externalRequestsUsed += 1;
-      quoteRequestId = quoteResponse.requestId || quoteResponse.data.requestId;
+      quoteRequestId = quoteResponse.requestId;
       if (quoteRequestId) {
         requestIds.push(quoteRequestId);
       }
