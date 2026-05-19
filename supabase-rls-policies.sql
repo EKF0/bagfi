@@ -238,3 +238,24 @@ FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
+
+-- 6. Bags partner stats
+ALTER TABLE bags_partner_stats ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON TABLE bags_partner_stats TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_partner_stats TO service_role;
+
+DROP POLICY IF EXISTS "Users can view own partner stats" ON bags_partner_stats;
+CREATE POLICY "Users can view own partner stats" ON bags_partner_stats
+FOR SELECT
+TO authenticated
+USING (partner_wallet IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));
+
+DROP POLICY IF EXISTS "Service role can manage all partner stats" ON bags_partner_stats;
+CREATE POLICY "Service role can manage all partner stats" ON bags_partner_stats
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);

@@ -17,6 +17,7 @@ import {
 } from 'chart.js';
 import { db } from '@/lib/database';
 import { BagsAnalytics } from './bags-analytics';
+import { PartnerCenter } from './partner-center';
 
 ChartJS.register(
   CategoryScale,
@@ -275,6 +276,10 @@ export function ProDashboard() {
 
       <div className="pt-8">
         <BagsAnalytics eligibleMints={eligibleMints} />
+      </div>
+
+      <div className="pt-12 border-t border-white/5 mt-12">
+        <PartnerCenter />
       </div>
     </div>
   );

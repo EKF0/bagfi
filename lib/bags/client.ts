@@ -718,6 +718,58 @@ export async function createClaimTransactions(params: ClaimTransactionRequest): 
 }
 
 /**
+ * Partner Configuration & Stats
+ */
+export interface PartnerStats {
+  claimedFees: string; // lamports
+  unclaimedFees: string; // lamports
+}
+
+export async function getPartnerStats(partnerPublicKey: string): Promise<BagsApiResponse<PartnerStats>> {
+  const queryParams = new URLSearchParams();
+  queryParams.set('partner', partnerPublicKey);
+
+  const response = await bagsRequest<BagsApiEnvelope<PartnerStats>>(`/fee-share/partner-config/stats?${queryParams.toString()}`);
+  return unwrapBagsResponse(response, 'Invalid partner stats response from Bags API');
+}
+
+export interface PartnerTransactionRequest {
+  partner: string;
+}
+
+export async function createPartnerClaimTransaction(params: PartnerTransactionRequest): Promise<BagsApiResponse<ClaimTransactionResponse[]>> {
+  const response = await bagsRequest<ClaimTransactionsResponse>('/fee-share/partner-config/claim-tx', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+
+  if (!response.data.success) {
+    throw new BagsApiError('Failed to generate partner claim transaction', 500, 'PARTNER_CLAIM_FAILED');
+  }
+
+  return {
+    ...response,
+    data: response.data.response
+  };
+}
+
+export async function createPartnerConfigTransaction(params: PartnerTransactionRequest): Promise<BagsApiResponse<ClaimTransactionResponse[]>> {
+  const response = await bagsRequest<ClaimTransactionsResponse>('/fee-share/partner-config/creation-tx', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+
+  if (!response.data.success) {
+    throw new BagsApiError('Failed to generate partner config transaction', 500, 'PARTNER_CONFIG_FAILED');
+  }
+
+  return {
+    ...response,
+    data: response.data.response
+  };
+}
+
+/**
  * Health Check
  * GET /ping
  */

@@ -52,6 +52,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL3-03** | ✅ completed | Solana Smart Bag catalog and allocation templates |
 | **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
+| **SOL4-03** | ✅ completed | Partner stats and partner fee claim management |
 | **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
 | **SOL6-02** | ✅ completed | Cache and background refresh policy for Bags data |
 | **SOL6-03** | ✅ completed | Solana and Bags observability via enhanced telemetry |
@@ -62,6 +63,15 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 ---
 
 ## Log
+
+### 2026-05-19 — SOL4-03 completed
+- Integrated Bags partner statistics and fee management:
+  - Added `getPartnerStats`, `createPartnerClaimTransaction`, and `createPartnerConfigTransaction` to Bags API client.
+  - Extended Supabase schema with `bags_partner_stats` table and ownership-based RLS.
+  - Created `/api/bags/partner` API routes for proxied partner operations.
+  - Built `components/pro/partner-center.tsx` for revenue monitoring and on-chain setup/claims.
+  - Integrated the Partner Center into the Pro Dashboard.
+- Validation: Partner flow audit, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL6-03 completed
 - Significantly enhanced platform observability via granular telemetry:

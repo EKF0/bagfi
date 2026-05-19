@@ -188,3 +188,15 @@ CREATE TABLE IF NOT EXISTS bags_user_fee_positions (
 
 CREATE INDEX IF NOT EXISTS idx_bags_user_fee_positions_wallet
   ON bags_user_fee_positions(wallet_address);
+
+-- 12. Bags Partner Stats (Cache for partner fees)
+CREATE TABLE IF NOT EXISTS bags_partner_stats (
+  partner_wallet text PRIMARY KEY REFERENCES users(wallet_address),
+  claimed_lamports text NOT NULL DEFAULT '0',
+  unclaimed_lamports text NOT NULL DEFAULT '0',
+  last_refreshed_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bags_partner_stats_last_refreshed_at
+  ON bags_partner_stats(last_refreshed_at DESC);
