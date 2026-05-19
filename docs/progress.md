@@ -51,10 +51,19 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL3-02** | ✅ completed | Bags token risk scoring with eligible-only discovery filter |
 | **SOL3-03** | ✅ completed | Solana Smart Bag catalog and allocation templates |
 | **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
+| **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL4-02 completed
+- Built claimable fee positions and claim transaction flow:
+  - Updated Bags API client with full `ClaimablePosition` schema and `createClaimTransactions`.
+  - Created `/api/bags/claim` API route for managing claim operations.
+  - Implemented `components/bags/claim-center.tsx` with transaction simulation and wallet signing.
+  - Added dedicated `/earnings` page and integrated it into the application header.
+- Validation: `npm run lint` (0 errors), `npm run build` (all 12 pages pass).
 
 ### 2026-05-19 — SOL4-01 completed
 - Integrated Bags token creator and lifetime fee analytics:

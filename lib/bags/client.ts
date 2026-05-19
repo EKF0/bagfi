@@ -651,13 +651,44 @@ export async function getTokenClaimEvents(params: TokenClaimEventsRequest): Prom
  * GET /claimable-positions
  */
 export interface ClaimablePosition {
+  isCustomFeeVault?: boolean;
+  baseMint: string;
+  isMigrated: boolean;
+  totalClaimableLamportsUserShare: number;
+  programId: string;
+  quoteMint?: string | null;
+  virtualPool?: string;
+  virtualPoolAddress?: string | null;
+  virtualPoolClaimableAmount?: number | null;
+  virtualPoolClaimableLamportsUserShare?: number | null;
+  dammPoolClaimableAmount?: number | null;
+  dammPoolClaimableLamportsUserShare?: number | null;
+  dammPoolAddress?: string | null;
+  dammPositionInfo?: {
+    position: string;
+    pool: string;
+    positionNftAccount: string;
+    tokenAMint: string;
+    tokenBMint: string;
+    tokenAVault: string;
+    tokenBVault: string;
+  } | null;
+  claimableDisplayAmount?: number | null;
+  user?: string | null;
+  claimerIndex?: number | null;
+  userBps?: number | null;
+  customFeeVault?: string | null;
+  customFeeVaultClaimerA?: string | null;
+  customFeeVaultClaimerB?: string | null;
+  customFeeVaultClaimerSide?: 'A' | 'B' | null;
+  
+  // Normalized fields for easier UI usage
   tokenMint: string;
-  tokenSymbol: string;
-  claimableAmount: string;
-  claimableAmountUsd: string;
-  lastClaimAt: string | null;
-  totalClaimed: string;
-  totalClaimedUsd: string;
+  tokenSymbol?: string;
+  claimableAmountUsd?: string;
+  lastClaimAt?: string | null;
+  totalClaimed?: string;
+  totalClaimedUsd?: string;
 }
 
 export interface ClaimablePositionsResponse {
@@ -666,7 +697,80 @@ export interface ClaimablePositionsResponse {
 }
 
 export async function getClaimablePositions(userPublicKey: string): Promise<BagsApiResponse<ClaimablePositionsResponse>> {
-  return bagsRequest<ClaimablePositionsResponse>(`/claimable-positions?userPublicKey=${userPublicKey}`);
+  const response = await bagsRequest<BagsApiEnvelope<ClaimablePosition[]> | ClaimablePositionsResponse>(`/claimable-positions?userPublicKey=${userPublicKey}`);
+  
+  if ('success' in response.data) {
+    const unwrapped = unwrapBagsResponse(
+      response as BagsApiResponse<BagsApiEnvelope<ClaimablePosition[]>>,
+      'Invalid claimable positions response from Bags API'
+    );
+
+    return {
+      ...unwrapped,
+      data: {
+        positions: unwrapped.data.map(p => ({
+          ...p,
+          tokenMint: p.baseMint // Normalize tokenMint
+        })),
+        totalClaimableUsd: '0' // Total USD is not always in the v2 response, set default
+      }
+    };
+  }
+
+  return response as BagsApiResponse<ClaimablePositionsResponse>;
+}
+
+/**
+ * Claim Transactions
+ * POST /token-launch/claim-txs/v2
+ */
+export interface ClaimTransactionRequest {
+  feeClaimer: string;
+  tokenMint: string;
+  virtualPoolAddress?: string | null;
+  dammV2Position?: string | null;
+  dammV2Pool?: string | null;
+  dammV2PositionNftAccount?: string | null;
+  tokenAMint?: string | null;
+  tokenBMint?: string | null;
+  tokenAVault?: string | null;
+  tokenBVault?: string | null;
+  claimVirtualPoolFees?: boolean | null;
+  claimDammV2Fees?: boolean | null;
+  isCustomFeeVault?: boolean | null;
+  feeShareProgramId?: string | null;
+  customFeeVaultClaimerA?: string | null;
+  customFeeVaultClaimerB?: string | null;
+  customFeeVaultClaimerSide?: 'A' | 'B' | null;
+}
+
+export interface ClaimTransactionResponse {
+  tx: string; // base64 serialized transaction
+  blockhash: {
+    blockhash: string;
+    lastValidBlockHeight: number;
+  };
+}
+
+export interface ClaimTransactionsResponse {
+  success: boolean;
+  response: ClaimTransactionResponse[];
+}
+
+export async function createClaimTransactions(params: ClaimTransactionRequest): Promise<BagsApiResponse<ClaimTransactionResponse[]>> {
+  const response = await bagsRequest<ClaimTransactionsResponse>('/token-launch/claim-txs/v2', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+
+  if (!response.data.success) {
+    throw new BagsApiError('Failed to generate claim transactions', 500);
+  }
+
+  return {
+    ...response,
+    data: response.data.response
+  };
 }
 
 /**
