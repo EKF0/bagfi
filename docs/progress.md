@@ -53,6 +53,7 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL4-01** | ✅ completed | Bags token creator and lifetime fee analytics integration |
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
 | **SOL4-03** | ✅ completed | Partner stats and partner fee claim management |
+| **SOL5-01** | ✅ completed | Token launch workflow as separated creator feature |
 | **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
 | **SOL6-02** | ✅ completed | Cache and background refresh policy for Bags data |
 | **SOL6-03** | ✅ completed | Solana and Bags observability via enhanced telemetry |
@@ -63,6 +64,14 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 ---
 
 ## Log
+
+### 2026-05-19 — SOL5-01 completed
+- Designed and implemented the "Creator Lab" as a dedicated advanced user section:
+  - Added `createTokenMetadata` and `createTokenLaunchTransaction` to Bags API client.
+  - Extended Supabase schema with `bags_creator_drafts` table and ownership-based RLS.
+  - Developed the `LaunchWizard` component providing a three-step guided flow for metadata creation, launch preview, and on-chain execution.
+  - Integrated safety disclosures and volatile asset warnings specifically for creators.
+- Validation: End-to-end launch workflow audit, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL4-03 completed
 - Integrated Bags partner statistics and fee management:

@@ -770,6 +770,54 @@ export async function createPartnerConfigTransaction(params: PartnerTransactionR
 }
 
 /**
+ * Token Launch / Creator Lab
+ */
+export interface TokenMetadataRequest {
+  name: string;
+  symbol: string;
+  description: string;
+  twitter?: string;
+  telegram?: string;
+  website?: string;
+  imageUrl?: string;
+}
+
+export interface TokenMetadataResponse {
+  metadataUri: string;
+}
+
+export async function createTokenMetadata(params: TokenMetadataRequest): Promise<BagsApiResponse<TokenMetadataResponse>> {
+  const response = await bagsRequest<BagsApiEnvelope<TokenMetadataResponse>>('/token-launch/metadata', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+  return unwrapBagsResponse(response, 'Invalid token metadata response from Bags API');
+}
+
+export interface TokenLaunchRequest {
+  creator: string;
+  metadataUri: string;
+  initialBuyAmount?: string; // lamports
+}
+
+export interface TokenLaunchResponse {
+  tx: string; // base64 serialized transaction
+  tokenMint: string;
+  blockhash: {
+    blockhash: string;
+    lastValidBlockHeight: number;
+  };
+}
+
+export async function createTokenLaunchTransaction(params: TokenLaunchRequest): Promise<BagsApiResponse<TokenLaunchResponse>> {
+  const response = await bagsRequest<BagsApiEnvelope<TokenLaunchResponse>>('/token-launch/create', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+  return unwrapBagsResponse(response, 'Invalid token launch transaction response from Bags API');
+}
+
+/**
  * Health Check
  * GET /ping
  */

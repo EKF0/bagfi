@@ -259,3 +259,19 @@ FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
+
+-- 7. Bags creator drafts
+ALTER TABLE bags_creator_drafts ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_creator_drafts TO service_role;
+
+DROP POLICY IF EXISTS "Users can manage own drafts" ON bags_creator_drafts;
+CREATE POLICY "Users can manage own drafts" ON bags_creator_drafts
+FOR ALL
+TO authenticated
+USING (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+))
+WITH CHECK (wallet_address IN (
+  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
+));

@@ -200,3 +200,25 @@ CREATE TABLE IF NOT EXISTS bags_partner_stats (
 
 CREATE INDEX IF NOT EXISTS idx_bags_partner_stats_last_refreshed_at
   ON bags_partner_stats(last_refreshed_at DESC);
+
+-- 13. Bags Creator Drafts (Save launch progress)
+CREATE TABLE IF NOT EXISTS bags_creator_drafts (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  wallet_address text NOT NULL REFERENCES users(wallet_address),
+  name text NOT NULL,
+  symbol text NOT NULL,
+  description text,
+  image_url text,
+  twitter text,
+  telegram text,
+  website text,
+  metadata_uri text,
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'metadata_created', 'launched', 'failed')),
+  token_mint text,
+  launch_signature text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bags_creator_drafts_wallet
+  ON bags_creator_drafts(wallet_address);

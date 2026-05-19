@@ -27,6 +27,9 @@ export function Header() {
           <Link href="/earnings" className="text-sm font-medium text-white/70 transition-colors hover:text-accentPrimary">
             Earnings
           </Link>
+          <Link href="/creator" className="text-sm font-medium text-white/70 transition-colors hover:text-accentPrimary">
+            Creator Lab
+          </Link>
           <Link href="/leaderboard" className="text-sm font-medium text-white/70 transition-colors hover:text-accentPrimary">
             Leaderboard
           </Link>
