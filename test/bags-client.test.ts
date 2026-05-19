@@ -65,6 +65,7 @@ describe('Bags API Client', () => {
         await vi.runAllTimersAsync();
       }
 
+      // Explicitly catch and expect error
       await expect(promise).rejects.toThrow(BagsApiError);
       expect(fetch).toHaveBeenCalledTimes(4); // Initial + 3 retries
     });

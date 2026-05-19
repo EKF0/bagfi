@@ -802,8 +802,8 @@
       ]
     },
     "/Users/ekf/Downloads/Projects/bagfi/contracts/mocks/MockERC20.sol": {
-      "lastModificationDate": 1778701488105,
-      "contentHash": "d923e6bf2ddade26107862841d712fcd",
+      "lastModificationDate": 1778701529717,
+      "contentHash": "14470249fdd5394f4b745aad11832dd6",
       "sourceName": "contracts/mocks/MockERC20.sol",
       "solcConfig": {
         "version": "0.8.26",
@@ -871,6 +871,42 @@
       ],
       "artifacts": [
         "MockStrategy"
+      ]
+    },
+    "/Users/ekf/Downloads/Projects/bagfi/contracts/mocks/MockRouter.sol": {
+      "lastModificationDate": 1778723664125,
+      "contentHash": "be6de7d10bf442432eb7a8bfd03fd25a",
+      "sourceName": "contracts/mocks/MockRouter.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "MockRouter"
       ]
     }
   }
