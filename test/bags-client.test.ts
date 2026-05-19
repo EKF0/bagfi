@@ -58,15 +58,19 @@ describe('Bags API Client', () => {
         json: async () => mockError
       });
 
-      const promise = getTokenLaunchFeed();
+      // To avoid unhandled rejection, we must catch it
+      const promise = getTokenLaunchFeed().catch(e => {
+        if (!(e instanceof BagsApiError)) throw e;
+        return e;
+      });
       
       // Fast-forward through retries
       for (let i = 0; i < 4; i++) {
         await vi.runAllTimersAsync();
       }
 
-      // Explicitly catch and expect error
-      await expect(promise).rejects.toThrow(BagsApiError);
+      const result = await promise;
+      expect(result).toBeInstanceOf(BagsApiError);
       expect(fetch).toHaveBeenCalledTimes(4); // Initial + 3 retries
     });
   });
