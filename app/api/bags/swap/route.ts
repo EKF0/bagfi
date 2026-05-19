@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate quoteResponse has required fields
-    if (!quoteResponse.routePlan || !quoteResponse.slippageBps === undefined) {
+    if (!quoteResponse.routePlan || quoteResponse.slippageBps === undefined) {
       telemetry.trackApiRequest('/api/bags/swap', 'POST', 400, Date.now() - startTime);
       return NextResponse.json(
         { error: 'Invalid quoteResponse: must include routePlan and slippageBps' },

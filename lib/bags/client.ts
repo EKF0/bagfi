@@ -431,10 +431,24 @@ export interface SwapTransactionResponse {
 }
 
 export async function createSwapTransaction(params: SwapTransactionRequest): Promise<BagsApiResponse<SwapTransactionResponse>> {
-  return bagsRequest<SwapTransactionResponse>('/trade/swap', {
+  const response = await bagsRequest<BagsApiEnvelope<SwapTransactionResponse> | SwapTransactionResponse>('/trade/swap', {
     method: 'POST',
     body: JSON.stringify(params)
   });
+
+  if ('success' in response.data) {
+    const unwrapped = unwrapBagsResponse(
+      response as BagsApiResponse<BagsApiEnvelope<SwapTransactionResponse>>,
+      'Invalid swap transaction response from Bags API'
+    );
+
+    return {
+      ...unwrapped,
+      data: unwrapped.data
+    };
+  }
+
+  return response as BagsApiResponse<SwapTransactionResponse>;
 }
 
 /**

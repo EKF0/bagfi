@@ -54,10 +54,24 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL4-02** | ✅ completed | Claimable fee positions and claim transaction flow |
 | **SOL6-01** | ✅ completed | Supabase schema design for Smart Bags and Bags caches |
 | **SOL6-02** | ✅ completed | Cache and background refresh policy for Bags data |
+| **SOL7-01** | ✅ completed | Mocked Bags API and Solana transaction tests |
 
 ---
 
 ## Log
+
+### 2026-05-19 — SOL7-01 completed
+- Established TypeScript unit and integration testing framework using **Vitest**.
+- Implemented 22 tests across 5 test files:
+  - `test/bags-client.test.ts`: Client retry logic, normalization, and envelope handling.
+  - `test/api-bags.test.ts`: API route validation and error forwarding.
+  - `test/session-engine.test.ts`: Smart Bag split and allocation logic.
+  - `test/discovery-cache.test.ts`: Cache refresh coordination with Supabase mocks.
+  - `test/risk-scoring.test.ts`: Eligibility and risk tiering logic.
+- Fixed two critical bugs identified by tests:
+  - Missing envelope unwrapping in `client.ts` (`createSwapTransaction`).
+  - Inverted validation logic for `slippageBps` in `/api/bags/swap`.
+- Validation: All 22 tests passing, `npm run lint` (passed), `npm run build` (passed).
 
 ### 2026-05-19 — SOL6-02 completed
 - Implemented centralized cache and background refresh policy for Bags data:
