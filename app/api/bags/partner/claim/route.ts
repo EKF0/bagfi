@@ -4,12 +4,23 @@ import {
   createPartnerConfigTransaction, 
   BagsApiError 
 } from '@/lib/bags/client';
+import { RequestValidationError, requireOneOf, requireSolanaPublicKey } from '@/lib/solana/validation';
 import telemetry from '@/lib/telemetry';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function errorResponse(error: unknown, status = 500) {
+  if (error instanceof RequestValidationError) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message
+      },
+      { status: 400 }
+    );
+  }
+
   if (error instanceof BagsApiError) {
     return NextResponse.json(
       {
@@ -31,6 +42,14 @@ function errorResponse(error: unknown, status = 500) {
   );
 }
 
+function requireBodyObject(body: unknown): Record<string, unknown> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new RequestValidationError('Request body must be an object');
+  }
+
+  return body as Record<string, unknown>;
+}
+
 /**
  * Generate partner claim or setup transactions.
  * POST /api/bags/partner/claim
@@ -39,15 +58,11 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    const body = await request.json();
-    const { partner, type } = body; // type: 'claim' | 'setup'
-
-    if (!partner) {
-      return NextResponse.json(
-        { success: false, error: 'partner is required' },
-        { status: 400 }
-      );
-    }
+    const body = requireBodyObject(await request.json());
+    const partner = requireSolanaPublicKey(body.partner, 'partner');
+    const type = body.type === undefined
+      ? 'claim'
+      : requireOneOf(body.type, 'type', ['claim', 'setup']); // type: 'claim' | 'setup'
 
     let result;
     if (type === 'setup') {
@@ -64,7 +79,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Bags partner operation failed:', error);
-    telemetry.trackApiRequest('/api/bags/partner/claim', 'POST', 500, Date.now() - startTime);
+    telemetry.trackApiRequest('/api/bags/partner/claim', 'POST', error instanceof RequestValidationError ? 400 : 500, Date.now() - startTime);
     return errorResponse(error);
   }
 }

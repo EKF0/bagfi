@@ -1,88 +1,97 @@
--- Row Level Security (RLS) Policies for BagFi Supabase Database
--- Run this in your Supabase SQL Editor after creating the tables
+-- Row Level Security (RLS) policies for BagFi.
+--
+-- Current production auth model:
+-- - Browser clients do not write private tables directly with the Supabase anon key.
+-- - Wallet-owned mutations go through Next.js API routes.
+-- - Next.js routes verify wallet message signatures where user intent is required.
+-- - Server routes use the Supabase service role key.
+--
+-- This intentionally avoids auth.uid()::text = wallet_address. Supabase Auth user IDs are
+-- UUIDs and do not equal Solana public keys unless a custom wallet-JWT model is added.
 
--- 1. Enable RLS on users table
+-- 0. Make Data API exposure explicit for projects that still have broad default grants.
+-- Public cache tables are granted SELECT below. Private tables are service-role-only.
+REVOKE ALL ON TABLE users FROM anon, authenticated;
+REVOKE ALL ON TABLE portfolio_snapshots FROM anon, authenticated;
+REVOKE ALL ON TABLE smart_bag_sessions FROM anon, authenticated;
+REVOKE ALL ON TABLE bags_user_fee_positions FROM anon, authenticated;
+REVOKE ALL ON TABLE bags_partner_stats FROM anon, authenticated;
+REVOKE ALL ON TABLE bags_creator_drafts FROM anon, authenticated;
+REVOKE ALL ON TABLE yield_leaderboard FROM anon, authenticated;
+
+-- 1. Private user/profile tables
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users can view their own profile
-CREATE POLICY "Users can view own profile" ON users
-FOR SELECT
-USING (auth.uid()::text = wallet_address OR wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
--- Policy: Users can insert their own profile (sign up)
-CREATE POLICY "Users can insert own profile" ON users
-FOR INSERT
-WITH CHECK (true); -- Allow anyone to insert during signup
-
--- Policy: Users can update their own profile
-CREATE POLICY "Users can update own profile" ON users
-FOR UPDATE
-USING (auth.uid()::text = wallet_address)
-WITH CHECK (auth.uid()::text = wallet_address);
-
--- Policy: Users can delete their own profile
-CREATE POLICY "Users can delete own profile" ON users
-FOR DELETE
-USING (auth.uid()::text = wallet_address);
-
--- 2. Enable RLS on portfolio_snapshots table
 ALTER TABLE portfolio_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE smart_bag_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_user_fee_positions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_partner_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bags_creator_drafts ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can view their own portfolio snapshots
-CREATE POLICY "Users can view own portfolio snapshots" ON portfolio_snapshots
-FOR SELECT
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE portfolio_snapshots TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE smart_bag_sessions TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_user_fee_positions TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_partner_stats TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_creator_drafts TO service_role;
+GRANT SELECT ON TABLE yield_leaderboard TO service_role;
 
--- Policy: Users can insert their own portfolio snapshots
-CREATE POLICY "Users can insert own portfolio snapshots" ON portfolio_snapshots
-FOR INSERT
-WITH CHECK (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
+DROP POLICY IF EXISTS "Users can view own profile" ON users;
+DROP POLICY IF EXISTS "Users can insert own profile" ON users;
+DROP POLICY IF EXISTS "Users can update own profile" ON users;
+DROP POLICY IF EXISTS "Users can delete own profile" ON users;
+DROP POLICY IF EXISTS "Service role can manage users" ON users;
+CREATE POLICY "Service role can manage users" ON users
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
--- Policy: Users can update their own portfolio snapshots
-CREATE POLICY "Users can update own portfolio snapshots" ON portfolio_snapshots
-FOR UPDATE
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-))
-WITH CHECK (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
+DROP POLICY IF EXISTS "Users can view own portfolio snapshots" ON portfolio_snapshots;
+DROP POLICY IF EXISTS "Users can insert own portfolio snapshots" ON portfolio_snapshots;
+DROP POLICY IF EXISTS "Users can update own portfolio snapshots" ON portfolio_snapshots;
+DROP POLICY IF EXISTS "Users can delete own portfolio snapshots" ON portfolio_snapshots;
+DROP POLICY IF EXISTS "Service role can manage portfolio snapshots" ON portfolio_snapshots;
+CREATE POLICY "Service role can manage portfolio snapshots" ON portfolio_snapshots
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
--- Policy: Users can delete their own portfolio snapshots
-CREATE POLICY "Users can delete own portfolio snapshots" ON portfolio_snapshots
-FOR DELETE
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
+DROP POLICY IF EXISTS "Users can view own sessions" ON smart_bag_sessions;
+DROP POLICY IF EXISTS "Users can insert own sessions" ON smart_bag_sessions;
+DROP POLICY IF EXISTS "Users can update own sessions" ON smart_bag_sessions;
+DROP POLICY IF EXISTS "Service role can manage all sessions" ON smart_bag_sessions;
+CREATE POLICY "Service role can manage all sessions" ON smart_bag_sessions
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
--- Optional: Create a helper function to get current user's wallet address
--- This makes policies cleaner if you prefer to use a function
-/*
-create or replace function get_current_user_wallet()
-returns text language sql as $$
-  select coalesce(
-    nullif(current_setting('request.jwt.claims', true), ''),
-    (select wallet_address from users where auth.uid()::text = wallet_address limit 1)
-  );
-$$;
-*/
+DROP POLICY IF EXISTS "Users can view own fee positions" ON bags_user_fee_positions;
+DROP POLICY IF EXISTS "Service role can manage all fee positions" ON bags_user_fee_positions;
+CREATE POLICY "Service role can manage all fee positions" ON bags_user_fee_positions
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
--- Alternative approach using JWT claims directly (if you have wallet_address in JWT)
--- Policy example using JWT claims:
--- CREATE POLICY "Users can view own profile" ON users
--- FOR SELECT
--- USING (wallet_address = coalesce(nullif(current_setting('request.jwt.claims')::json ->> 'wallet_address', ''), ''));
+DROP POLICY IF EXISTS "Users can view own partner stats" ON bags_partner_stats;
+DROP POLICY IF EXISTS "Service role can manage all partner stats" ON bags_partner_stats;
+CREATE POLICY "Service role can manage all partner stats" ON bags_partner_stats
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
--- 3. Bags public cache tables
--- These contain public Bags.fm discovery metadata. Clients may read them, but
--- only server-side service-role jobs should write refresh results.
+DROP POLICY IF EXISTS "Users can manage own drafts" ON bags_creator_drafts;
+DROP POLICY IF EXISTS "Service role can manage creator drafts" ON bags_creator_drafts;
+CREATE POLICY "Service role can manage creator drafts" ON bags_creator_drafts
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
+-- 2. Public Bags discovery/cache tables
 ALTER TABLE bags_token_launches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bags_pools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bags_cache_state ENABLE ROW LEVEL SECURITY;
@@ -150,7 +159,7 @@ TO service_role
 USING (true)
 WITH CHECK (true);
 
--- 4. Bags analytics tables
+-- 3. Public on-chain analytics tables
 ALTER TABLE bags_token_analytics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bags_token_claim_events ENABLE ROW LEVEL SECURITY;
 
@@ -185,93 +194,3 @@ FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
-
--- 5. User private tables
-ALTER TABLE smart_bag_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bags_user_fee_positions ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users can view their own smart bag sessions
-CREATE POLICY "Users can view own sessions" ON smart_bag_sessions
-FOR SELECT
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
--- Policy: Users can insert their own smart bag sessions
-CREATE POLICY "Users can insert own sessions" ON smart_bag_sessions
-FOR INSERT
-WITH CHECK (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
--- Policy: Users can update their own smart bag sessions
-CREATE POLICY "Users can update own sessions" ON smart_bag_sessions
-FOR UPDATE
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-))
-WITH CHECK (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
--- Policy: Users can view their own fee positions
-CREATE POLICY "Users can view own fee positions" ON bags_user_fee_positions
-FOR SELECT
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
--- Policy: Service role can manage all private tables
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE smart_bag_sessions TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_user_fee_positions TO service_role;
-
-DROP POLICY IF EXISTS "Service role can manage all sessions" ON smart_bag_sessions;
-CREATE POLICY "Service role can manage all sessions" ON smart_bag_sessions
-FOR ALL
-TO service_role
-USING (true)
-WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Service role can manage all fee positions" ON bags_user_fee_positions;
-CREATE POLICY "Service role can manage all fee positions" ON bags_user_fee_positions
-FOR ALL
-TO service_role
-USING (true)
-WITH CHECK (true);
-
--- 6. Bags partner stats
-ALTER TABLE bags_partner_stats ENABLE ROW LEVEL SECURITY;
-
-GRANT SELECT ON TABLE bags_partner_stats TO anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_partner_stats TO service_role;
-
-DROP POLICY IF EXISTS "Users can view own partner stats" ON bags_partner_stats;
-CREATE POLICY "Users can view own partner stats" ON bags_partner_stats
-FOR SELECT
-TO authenticated
-USING (partner_wallet IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));
-
-DROP POLICY IF EXISTS "Service role can manage all partner stats" ON bags_partner_stats;
-CREATE POLICY "Service role can manage all partner stats" ON bags_partner_stats
-FOR ALL
-TO service_role
-USING (true)
-WITH CHECK (true);
-
--- 7. Bags creator drafts
-ALTER TABLE bags_creator_drafts ENABLE ROW LEVEL SECURITY;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bags_creator_drafts TO service_role;
-
-DROP POLICY IF EXISTS "Users can manage own drafts" ON bags_creator_drafts;
-CREATE POLICY "Users can manage own drafts" ON bags_creator_drafts
-FOR ALL
-TO authenticated
-USING (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-))
-WITH CHECK (wallet_address IN (
-  SELECT wallet_address FROM users WHERE auth.uid()::text = wallet_address
-));

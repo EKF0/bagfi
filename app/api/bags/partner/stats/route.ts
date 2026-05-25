@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPartnerStats, BagsApiError } from '@/lib/bags/client';
-import { db } from '@/lib/database';
+import { RequestValidationError, requireSolanaPublicKey } from '@/lib/solana/validation';
 import telemetry from '@/lib/telemetry';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function errorResponse(error: unknown, status = 500) {
+  if (error instanceof RequestValidationError) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message
+      },
+      { status: 400 }
+    );
+  }
+
   if (error instanceof BagsApiError) {
     return NextResponse.json(
       {
@@ -34,16 +44,13 @@ function errorResponse(error: unknown, status = 500) {
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const partner = request.nextUrl.searchParams.get('partner');
-
-  if (!partner) {
-    return NextResponse.json(
-      { success: false, error: 'partner public key is required' },
-      { status: 400 }
-    );
-  }
 
   try {
+    const partner = requireSolanaPublicKey(
+      request.nextUrl.searchParams.get('partner'),
+      'partner'
+    );
+
     // 1. Fetch from Bags API
     const response = await getPartnerStats(partner);
     const stats = response.data;
@@ -59,7 +66,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Bags partner stats fetch failed:', error);
-    telemetry.trackApiRequest('/api/bags/partner/stats', 'GET', 500, Date.now() - startTime);
+    telemetry.trackApiRequest('/api/bags/partner/stats', 'GET', error instanceof RequestValidationError ? 400 : 500, Date.now() - startTime);
     return errorResponse(error);
   }
 }

@@ -15,7 +15,6 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { db } from '@/lib/database';
 import { BagsAnalytics } from './bags-analytics';
 import { PartnerCenter } from './partner-center';
 
@@ -52,15 +51,11 @@ export function ProDashboard() {
 
       try {
         setIsChecking(true);
-        const existingUser = await db.users.findByWalletAddress(address);
+        const response = await fetch(`/api/users/profile?walletAddress=${encodeURIComponent(address)}`);
+        const json = await response.json();
         
         if (isMounted) {
-          if (!existingUser) {
-            await db.users.createUser(address, false);
-            setIsPro(false);
-          } else {
-            setIsPro(!!existingUser.is_pro);
-          }
+          setIsPro(Boolean(json.success && json.data?.is_pro));
         }
       } catch (err) {
         console.error('Error fetching pro status:', err);
@@ -96,17 +91,7 @@ export function ProDashboard() {
   }, [connected, address]);
 
   const handleMintPro = async () => {
-    if (!address) return;
-    
-    try {
-      setIsChecking(true);
-      await db.users.updateProStatus(address, true);
-      setIsPro(true);
-    } catch (err) {
-      console.error('Error upgrading to pro', err);
-    } finally {
-      setIsChecking(false);
-    }
+    console.warn('Pro pass minting must be wired to a real NFT or subscription verification flow before production.');
   };
 
   if (!connected) {
@@ -161,11 +146,12 @@ export function ProDashboard() {
 
         <button 
           onClick={handleMintPro}
-          className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-deepNavy font-bold py-4 px-12 rounded-xl transition-all shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95"
+          disabled
+          className="bg-white/10 text-white/40 font-bold py-4 px-12 rounded-xl transition-all cursor-not-allowed"
         >
-          Mint Pro Pass (0.5 SOL)
+          Pro Pass Coming Soon
         </button>
-        <p className="mt-4 text-xs text-white/40">Demo Mode: Button will instantly grant access.</p>
+        <p className="mt-4 text-xs text-white/40">Production access will require verified NFT or subscription ownership.</p>
       </div>
     );
   }

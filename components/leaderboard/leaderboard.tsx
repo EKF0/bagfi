@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Trophy, Medal, Loader2 } from 'lucide-react';
-import { db } from '@/lib/database';
+import {
+  getUserProfileSigningMessage,
+  type UserProfileAuthorization
+} from '@/lib/users/profile-signing';
 
 const MOCK_LEADERBOARD = [
   { rank: 1, address: '7xKXtg...9Wp', yield: '+42.5%', tvl: '$1.2M', tags: ['DeFi Degen', 'Whale'] },
@@ -15,9 +18,10 @@ const MOCK_LEADERBOARD = [
 ];
 
 export function Leaderboard() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, signMessage } = useWallet();
   const [isPublic, setIsPublic] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [leaderboardData, setLeaderboardData] = useState(MOCK_LEADERBOARD);
 
   const address = publicKey?.toBase58();
@@ -27,12 +31,15 @@ export function Leaderboard() {
     
     const fetchLeaderboard = async () => {
       try {
-        const { data: publicUsers, error } = await db.users.findManyByPublicLeaderboard(true);
-        
-        if (error) throw error;
+        const response = await fetch('/api/users/leaderboard?limit=50');
+        const json = await response.json();
+
+        if (!response.ok || json.success === false) {
+          throw new Error(json.error || 'Failed to load leaderboard');
+        }
         
         if (isMounted) {
-          const realUsers = publicUsers.map((u: any, i: number) => ({
+          const realUsers = (json.data || []).map((u: any, i: number) => ({
             rank: i + 1,
             address: u.wallet_address.slice(0, 4) + '...' + u.wallet_address.slice(-4),
             yield: '+12.4%',
@@ -49,10 +56,11 @@ export function Leaderboard() {
         }
         
         if (address && isMounted) {
-          const userData = await db.users.findByWalletAddress(address);
+          const profileResponse = await fetch(`/api/users/profile?walletAddress=${encodeURIComponent(address)}`);
+          const profileJson = await profileResponse.json();
           
-          if (userData) {
-            setIsPublic(!!userData.is_public_leaderboard);
+          if (profileJson.success && profileJson.data) {
+            setIsPublic(Boolean(profileJson.data.is_public_leaderboard));
           }
         }
       } catch (err) {
@@ -71,21 +79,66 @@ export function Leaderboard() {
     };
   }, [address]);
 
+  function bytesToBase64(value: Uint8Array) {
+    let binary = '';
+
+    for (const byte of value) {
+      binary += String.fromCharCode(byte);
+    }
+
+    return window.btoa(binary);
+  }
+
+  async function createAuthorization(isPublicLeaderboard: boolean): Promise<UserProfileAuthorization | null> {
+    if (!address || !signMessage) {
+      return null;
+    }
+
+    const message = getUserProfileSigningMessage({
+      walletAddress: address,
+      action: 'update-public-leaderboard',
+      isPublicLeaderboard
+    });
+    const signature = await signMessage(new TextEncoder().encode(message));
+
+    return {
+      message,
+      signature: bytesToBase64(signature)
+    };
+  }
+
   const togglePublic = async () => {
     if (!address) return;
     const newValue = !isPublic;
     setIsPublic(newValue);
+    setUpdateError(null);
     
     try {
-      const existingUser = await db.users.findByWalletAddress(address);
-      if (!existingUser) {
-        await db.users.createUser(address, false, newValue);
-      } else {
-        await db.users.updatePublicLeaderboardStatus(address, newValue);
+      const authorization = await createAuthorization(newValue);
+
+      if (!authorization) {
+        throw new Error('Your wallet must support message signing to update leaderboard visibility.');
+      }
+
+      const response = await fetch('/api/users/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: address,
+          action: 'update-public-leaderboard',
+          isPublicLeaderboard: newValue,
+          authorization
+        })
+      });
+      const json = await response.json();
+
+      if (!response.ok || json.success === false) {
+        throw new Error(json.error || 'Failed to update public status');
       }
     } catch (err) {
       console.error('Failed to update public status:', err);
       setIsPublic(!newValue);
+      setUpdateError(err instanceof Error ? err.message : 'Failed to update public status.');
     }
   };
 
@@ -117,10 +170,14 @@ export function Leaderboard() {
             <div className="text-sm text-white/60 mb-2">Share your performance publicly?</div>
             <button 
               onClick={togglePublic}
+              disabled={!signMessage}
               className={`px-6 py-2 rounded-xl text-sm font-bold transition-colors ${isPublic ? 'bg-white/10 text-white' : 'bg-accentPrimary text-deepNavy'}`}
             >
               {isPublic ? 'Make Private' : 'Make Public & Opt-in'}
             </button>
+            {updateError && (
+              <div className="mt-2 text-xs text-red-300 max-w-xs">{updateError}</div>
+            )}
           </div>
         </div>
       )}
