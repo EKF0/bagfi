@@ -38,3 +38,6 @@ SOL6-03,Solana Data Layer,Add Solana and Bags observability,AI,completed,P1,SOL2
 SOL7-01,Solana QA & Security,Add mocked Bags API and Solana transaction tests,AI,completed,P0,SOL2-04,"Unit and integration tests cover quote, swap transaction, simulation failure, and rebalance session edge cases"
 SOL7-02,Solana QA & Security,Create Smart Bag safety and compliance review checklist,AI,completed,P0,SOL3-03,"Checklist covers no custody, no private keys, risk copy, volatile token warnings, and wallet approval requirements"
 SOL7-03,Solana QA & Security,Run Solana/Bags launch readiness gate,AI,completed,P0,SOL7-01,"Build, lint, tests, mocked API smoke tests, env docs, and manual wallet QA all pass before public release"
+P0-10,Legacy Migration,Decide and document EVM contract status; remove from launch gates or fix failing tests,AI,completed,P0,SOL7-03,Solidity files migrated to legacy/evm/ contracts configured under standalone test suite and package scripts updated
+P0-08,QA CI/CD Observability,Add production monitoring/alerts,AI,completed,P0,SOL6-03,Sentry NextJS SDK integrated webhook alerts routed securely via /api/telemetry/alert for simulation failures rate-limit spikes and RPC latency
+
