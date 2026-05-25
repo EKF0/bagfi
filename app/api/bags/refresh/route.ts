@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function isRefreshAuthorized(request: NextRequest): boolean {
-  const refreshSecret = process.env.BAGS_CACHE_REFRESH_SECRET;
+  const refreshSecret = process.env.CRON_SECRET || process.env.BAGS_CACHE_REFRESH_SECRET;
 
   if (!refreshSecret) {
     return process.env.NODE_ENV !== 'production';
@@ -41,15 +41,11 @@ function errorResponse(error: unknown, status = 500) {
   );
 }
 
-/**
- * Unified refresh endpoint for background jobs.
- * POST /api/bags/refresh
- */
-export async function POST(request: NextRequest) {
+async function runRefresh(request: NextRequest, method: 'GET' | 'POST') {
   const startTime = Date.now();
 
   if (!isRefreshAuthorized(request)) {
-    telemetry.trackApiRequest('/api/bags/refresh', 'POST', 401, Date.now() - startTime);
+    telemetry.trackApiRequest('/api/bags/refresh', method, 401, Date.now() - startTime);
     return NextResponse.json(
       {
         success: false,
@@ -71,7 +67,7 @@ export async function POST(request: NextRequest) {
     });
 
     const duration = Date.now() - startTime;
-    telemetry.trackApiRequest('/api/bags/refresh', 'POST', 200, duration);
+    telemetry.trackApiRequest('/api/bags/refresh', method, 200, duration);
     
     // Log detailed refresh telemetry
     telemetry.trackUserAction('bags.refresh_cycle', {
@@ -94,7 +90,23 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Bags unified refresh failed:', error);
-    telemetry.trackApiRequest('/api/bags/refresh', 'POST', 500, Date.now() - startTime);
+    telemetry.trackApiRequest('/api/bags/refresh', method, 500, Date.now() - startTime);
     return errorResponse(error);
   }
+}
+
+/**
+ * Unified refresh endpoint for background jobs.
+ * GET /api/bags/refresh
+ */
+export async function GET(request: NextRequest) {
+  return runRefresh(request, 'GET');
+}
+
+/**
+ * Unified refresh endpoint for manual jobs and external workers.
+ * POST /api/bags/refresh
+ */
+export async function POST(request: NextRequest) {
+  return runRefresh(request, 'POST');
 }

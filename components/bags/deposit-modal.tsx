@@ -22,6 +22,10 @@ import {
   type SmartBagTemplate,
   type TokenInfo,
 } from '@/lib/smart-bags/session-engine';
+import {
+  getSmartBagSessionSigningMessage,
+  type SmartBagSessionAuthorization
+} from '@/lib/smart-bags/session-signing';
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -68,6 +72,68 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   return data;
 }
 
+function bytesToBase64(value: Uint8Array) {
+  let binary = '';
+
+  for (const byte of value) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return window.btoa(binary);
+}
+
+async function createSessionAuthorization(
+  session: SmartBagDepositSession,
+  signMessage?: (message: Uint8Array) => Promise<Uint8Array>
+): Promise<SmartBagSessionAuthorization | null> {
+  if (!signMessage) {
+    console.warn('Wallet does not support message signing; Smart Bag session will remain local-only.');
+    return null;
+  }
+
+  try {
+    const message = getSmartBagSessionSigningMessage(session);
+    const signature = await signMessage(new TextEncoder().encode(message));
+
+    return {
+      message,
+      signature: bytesToBase64(signature)
+    };
+  } catch (error) {
+    console.warn('Smart Bag session authorization was declined; session will remain local-only:', error);
+    return null;
+  }
+}
+
+async function persistSmartBagSession(
+  session: SmartBagDepositSession,
+  authorization: SmartBagSessionAuthorization | null
+) {
+  saveSmartBagSession(session);
+
+  if (!authorization) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/bags/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session, authorization })
+    });
+    const data = await response.json().catch(() => ({})) as ApiEnvelope<{ id: string }>;
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || data.message || `Request failed with ${response.status}`);
+    }
+  } catch (error) {
+    console.warn(
+      'Smart Bag session was saved locally but could not be persisted server-side:',
+      error
+    );
+  }
+}
+
 function base64ToBytes(value: string) {
   const binary = window.atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -88,7 +154,7 @@ function receiptId(snapshotId: string) {
 }
 
 export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
-  const { connected, publicKey, signTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, signMessage } = useWallet();
   const triggerRefresh = useBalanceStore((state) => state.triggerRefresh);
   const walletAddress = publicKey?.toBase58();
   const [amount, setAmount] = useState('');
@@ -97,6 +163,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
   const [isPreparing, setIsPreparing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [session, setSession] = useState<SmartBagDepositSession | null>(null);
+  const [sessionAuthorization, setSessionAuthorization] = useState<SmartBagSessionAuthorization | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const inputToken = useMemo<TokenInfo>(() => {
@@ -107,6 +174,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
   const resetSession = () => {
     setSession(null);
+    setSessionAuthorization(null);
     setSessionError(null);
   };
 
@@ -187,8 +255,11 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
       }
 
       const quotedSession = attachQuoteSnapshots(draftSession, quoteSnapshots);
+      const authorization = await createSessionAuthorization(quotedSession, signMessage);
+
       setSession(quotedSession);
-      saveSmartBagSession(quotedSession);
+      setSessionAuthorization(authorization);
+      await persistSmartBagSession(quotedSession, authorization);
     } catch (error) {
       setSessionError(error instanceof Error ? error.message : 'Failed to prepare deposit session.');
     } finally {
@@ -204,9 +275,16 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
     const sessionStartTime = Date.now();
 
     const receipts: SmartBagSessionReceipt[] = [];
-    let activeSession: SmartBagDepositSession = { ...session, status: 'signing' };
+    let activeSession: SmartBagDepositSession = {
+      ...session,
+      status: 'signing',
+      updatedAt: new Date().toISOString()
+    };
 
     try {
+      setSession(activeSession);
+      await persistSmartBagSession(activeSession, sessionAuthorization);
+
       const connection = new Connection(
         process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com'
       );
@@ -224,7 +302,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
           activeSession = attachReceipts(activeSession, receipts);
           setSession(activeSession);
-          saveSmartBagSession(activeSession);
+          await persistSmartBagSession(activeSession, sessionAuthorization);
           continue;
         }
 
@@ -280,7 +358,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
           receipts.push(receipt);
           activeSession = attachReceipts(activeSession, receipts);
           setSession(activeSession);
-          saveSmartBagSession(activeSession);
+          await persistSmartBagSession(activeSession, sessionAuthorization);
 
           const confirmation = await connection.confirmTransaction(signature, 'confirmed');
           const confirmationDurationMs = Date.now() - confirmationStartTime;
@@ -309,7 +387,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
           activeSession = attachReceipts(activeSession, receipts);
           setSession(activeSession);
-          saveSmartBagSession(activeSession);
+          await persistSmartBagSession(activeSession, sessionAuthorization);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Transaction failed.';
           
@@ -325,7 +403,7 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
 
           activeSession = attachReceipts(activeSession, receipts);
           setSession(activeSession);
-          saveSmartBagSession(activeSession);
+          await persistSmartBagSession(activeSession, sessionAuthorization);
           throw error;
         }
       }
@@ -337,6 +415,16 @@ export function DepositModal({ isOpen, onClose, bag }: DepositModalProps) {
       console.log(`Deposit session ${session.id} completed successfully in ${totalSessionDuration}ms`);
       
     } catch (error) {
+      if (activeSession.status !== 'failed') {
+        activeSession = {
+          ...activeSession,
+          status: 'failed',
+          updatedAt: new Date().toISOString()
+        };
+        setSession(activeSession);
+        await persistSmartBagSession(activeSession, sessionAuthorization);
+      }
+
       setSessionError(error instanceof Error ? error.message : 'Failed to execute deposit session.');
     } finally {
       setIsExecuting(false);

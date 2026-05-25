@@ -9,6 +9,7 @@ import telemetry from '@/lib/telemetry';
 interface TransactionReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onConfirmed?: (signature: string) => void;
   quoteData: {
     inputAmount: string;
     outputAmount: string;
@@ -43,6 +44,7 @@ interface TransactionReviewModalProps {
 export function TransactionReviewModal({
   isOpen,
   onClose,
+  onConfirmed,
   quoteData,
   fromToken,
   toToken,
@@ -145,6 +147,7 @@ export function TransactionReviewModal({
     
     setIsSigning(true);
     const startTime = Date.now();
+    let submittedSignature: string | null = null;
     
     try {
       const connection = new Connection(
@@ -165,6 +168,7 @@ export function TransactionReviewModal({
         preflightCommitment: 'confirmed'
       });
       
+      submittedSignature = signature;
       setTxSignature(signature);
       
       // Wait for confirmation
@@ -186,6 +190,7 @@ export function TransactionReviewModal({
       }
 
       setIsConfirmed(true);
+      onConfirmed?.(signature);
       telemetry.trackSolanaConfirmation({
         signature,
         durationMs,
@@ -202,7 +207,7 @@ export function TransactionReviewModal({
       setSimulationError(err.message || 'Transaction failed');
       
       telemetry.trackSolanaConfirmation({
-        signature: txSignature || 'unknown',
+        signature: submittedSignature || txSignature || 'unknown',
         durationMs,
         status: 'failed',
         error: err.message,

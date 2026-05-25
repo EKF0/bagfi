@@ -18,7 +18,8 @@ CREATE TABLE portfolio_snapshots (
 );
 
 -- 3. Leaderboard view (To rank users)
-CREATE VIEW yield_leaderboard AS
+CREATE OR REPLACE VIEW yield_leaderboard
+WITH (security_invoker = true) AS
 SELECT 
   wallet_address,
   is_public_leaderboard,
@@ -155,22 +156,78 @@ CREATE INDEX IF NOT EXISTS idx_bags_token_claim_events_wallet_address
 
 -- 10. Smart Bag Sessions (Persistent user sessions)
 CREATE TABLE IF NOT EXISTS smart_bag_sessions (
-  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id text PRIMARY KEY,
   wallet_address text NOT NULL REFERENCES users(wallet_address),
+  session_type text NOT NULL DEFAULT 'deposit' CHECK (session_type IN ('deposit', 'rebalance')),
   bag_id text NOT NULL,
-  status text NOT NULL CHECK (status IN ('idle', 'depositing', 'confirming', 'success', 'error')),
+  bag_title text,
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'quoted', 'signing', 'confirmed', 'failed')),
   deposit_amount text,
   deposit_mint text,
+  input_token jsonb NOT NULL DEFAULT '{}'::jsonb,
+  input_amount_base_units text,
+  slippage_bps integer,
+  max_slippage_bps integer,
+  rebalance_threshold_bps integer,
+  allocation_splits jsonb NOT NULL DEFAULT '[]'::jsonb,
+  quote_snapshots jsonb NOT NULL DEFAULT '[]'::jsonb,
+  receipts jsonb NOT NULL DEFAULT '[]'::jsonb,
   steps jsonb NOT NULL DEFAULT '[]'::jsonb,
   current_step_index integer NOT NULL DEFAULT 0,
   tx_signatures text[] NOT NULL DEFAULT '{}',
   error_message text,
+  raw_session jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE smart_bag_sessions
+  ALTER COLUMN id TYPE text USING id::text;
+
+ALTER TABLE smart_bag_sessions
+  ADD COLUMN IF NOT EXISTS session_type text NOT NULL DEFAULT 'deposit',
+  ADD COLUMN IF NOT EXISTS bag_title text,
+  ADD COLUMN IF NOT EXISTS input_token jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS input_amount_base_units text,
+  ADD COLUMN IF NOT EXISTS slippage_bps integer,
+  ADD COLUMN IF NOT EXISTS max_slippage_bps integer,
+  ADD COLUMN IF NOT EXISTS rebalance_threshold_bps integer,
+  ADD COLUMN IF NOT EXISTS allocation_splits jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS quote_snapshots jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS receipts jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS raw_session jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+UPDATE smart_bag_sessions
+SET status = CASE status
+  WHEN 'idle' THEN 'draft'
+  WHEN 'depositing' THEN 'signing'
+  WHEN 'confirming' THEN 'signing'
+  WHEN 'success' THEN 'confirmed'
+  WHEN 'error' THEN 'failed'
+  ELSE status
+END;
+
+ALTER TABLE smart_bag_sessions
+  ALTER COLUMN status SET DEFAULT 'draft';
+
+ALTER TABLE smart_bag_sessions
+  DROP CONSTRAINT IF EXISTS smart_bag_sessions_session_type_check,
+  ADD CONSTRAINT smart_bag_sessions_session_type_check
+    CHECK (session_type IN ('deposit', 'rebalance'));
+
+ALTER TABLE smart_bag_sessions
+  DROP CONSTRAINT IF EXISTS smart_bag_sessions_status_check,
+  ADD CONSTRAINT smart_bag_sessions_status_check
+    CHECK (status IN ('draft', 'quoted', 'signing', 'confirmed', 'failed'));
+
 CREATE INDEX IF NOT EXISTS idx_smart_bag_sessions_wallet_status
   ON smart_bag_sessions(wallet_address, status);
+
+CREATE INDEX IF NOT EXISTS idx_smart_bag_sessions_wallet_updated
+  ON smart_bag_sessions(wallet_address, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_smart_bag_sessions_bag
+  ON smart_bag_sessions(bag_id);
 
 -- 11. Bags user fee positions cache
 CREATE TABLE IF NOT EXISTS bags_user_fee_positions (
