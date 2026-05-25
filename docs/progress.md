@@ -61,10 +61,21 @@ BagFi is a unified Web3 asset platform that consolidates fragmented crypto portf
 | **SOL7-01** | ✅ completed | Mocked Bags API and Solana transaction tests |
 | **SOL7-02** | ✅ completed | Smart Bag safety and compliance review checklist |
 | **SOL7-03** | ✅ completed | Solana/Bags launch readiness gate |
+| **P0-08** | ✅ completed | Production Sentry tracking and sliding-window webhook alerts |
 
 ---
 
 ## Log
+
+### 2026-05-25 — P0-08 completed
+- Integrated Sentry Next.js SDK for production-grade exception tracking in client, server, and edge runtimes.
+- Implemented real-time alert rules and thresholds in `lib/telemetry.ts`:
+  - Bags API Error Spikes: Triggers high-priority webhook alert on >= 3 failures (429 or 5xx) in a rolling 5-minute sliding window.
+  - Simulation Failures: Dispatches an immediate critical alert on failed Solana preflight simulations.
+  - RPC Latency Breaches: Alerts on confirmation latencies exceeding configured threshold (default 10,000ms).
+- Created secure Client-to-Server alert dispatcher `/api/telemetry/alert` preventing API webhook URL exposure to the frontend.
+- Added comprehensive testing with a 7-test Vitest suite in `test/telemetry.test.ts`.
+- Validation: Build and lint pass successfully, all 7 telemetry tests pass.
 
 ### 2026-05-19 — SOL5-02 completed
 - Finalized the "Creator Lab" with on-chain fee share configuration:
