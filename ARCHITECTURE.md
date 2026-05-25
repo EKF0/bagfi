@@ -22,7 +22,7 @@ The architecture follows a **hybrid server/client model**: sensitive operations 
 | API | Bags.fm API v1 (server-side proxy) |
 | Database | Supabase (PostgreSQL + Auth + RLS) |
 | Telemetry | Custom event logger with Sentry integration |
-| Testing | Vitest (TS), Hardhat (Solidity) |
+| Testing | Vitest (TS) [Primary], Hardhat (Solidity) [Legacy] |
 
 ---
 
@@ -195,8 +195,9 @@ graph TB
 - `.env` with: `BAGS_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SOLANA_RPC_URL`
 
 ### Testing
-- `npm run test:ts`: Vitest suite for client, routes, and logic (22+ tests).
-- `npm run test`: Hardhat suite for Solidity contracts.
+- `npm run test`: Primary Vitest suite for Solana client, routes, and logic (26+ tests).
+- `npm run test:ts`: Alias for the primary Solana Vitest suite.
+- `npm run test:evm`: Legacy Hardhat suite for archived Solidity contracts (`legacy/evm/`).
 
 ---
 
